@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "104984231168",
+    "project_id": "edusign-433e2",
+    "storage_bucket": "edusign-433e2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:104984231168:android:36a2631322dcc78bb8c7e5",
+        "android_client_info": {
+          "package_name": "com.example.edu_sign"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCw4nKUuDHKawwPe7buUHT8uB1CwrJniaY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

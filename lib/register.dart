@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login.dart';
+import 'auth.dart';
+import 'verify.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -10,11 +12,42 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   String? selectedJenjang;
-  final List<String> jenjangList = [
-    "SD",
-    "SMP",
-    "SMA",
-  ];
+  String? errorMessage = '';
+
+  final List<String> jenjangList = ["SD", "SMP", "SMA"];
+
+  // Controllers
+  final TextEditingController _namaController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+  final Auth _auth = Auth();
+
+  Future<void> _signUp() async {
+    if (_passwordController.text != _confirmPasswordController.text) {
+      setState(() {
+        errorMessage = "Password dan Konfirmasi Password tidak sama.";
+      });
+      return;
+    }
+
+    try {
+      await Auth().signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      // Kalau berhasil, arahkan ke login
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    } catch (e) {
+      setState(() {
+        errorMessage = e.toString();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +91,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 SizedBox(
                   width: 300,
                   height: 50,
-                  child: _buildTextField(hintText: "Nama", obscure: false),
+                  child: _buildTextField(
+                      controller: _namaController,
+                      hintText: "Nama",
+                      obscure: false),
                 ),
                 const SizedBox(height: 20),
 
@@ -110,7 +146,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 SizedBox(
                   width: 300,
                   height: 50,
-                  child: _buildTextField(hintText: "Email", obscure: false),
+                  child: _buildTextField(
+                      controller: _emailController,
+                      hintText: "Email",
+                      obscure: false),
                 ),
                 const SizedBox(height: 20),
 
@@ -118,7 +157,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 SizedBox(
                   width: 300,
                   height: 50,
-                  child: _buildTextField(hintText: "Password", obscure: true),
+                  child: _buildTextField(
+                      controller: _passwordController,
+                      hintText: "Password",
+                      obscure: true),
                 ),
                 const SizedBox(height: 20),
 
@@ -127,8 +169,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   width: 300,
                   height: 50,
                   child: _buildTextField(
-                      hintText: "Konfirmasi Password", obscure: true),
+                      controller: _confirmPasswordController,
+                      hintText: "Konfirmasi Password",
+                      obscure: true),
                 ),
+
+                // Error message
+                if (errorMessage != null && errorMessage!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      errorMessage!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
+
                 const SizedBox(height: 40),
 
                 // Tombol Daftar
@@ -144,13 +199,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       elevation: 4,
                     ),
-                    onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const LoginScreen(),
-                        ),
-                      );
+                    onPressed: () async {
+                      try {
+                        final user = await _auth.signUp(
+                          email: _emailController.text.trim(),
+                          password: _passwordController.text.trim(),
+                        );
+
+                        if (user != null) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (context) => const VerifyScreen()),
+                          );
+                        }
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Error: $e")),
+                        );
+                      }
                     },
                     child: const Text(
                       "Daftar",
@@ -170,8 +236,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   // Custom TextField
-  Widget _buildTextField({required String hintText, required bool obscure}) {
+  Widget _buildTextField({
+    required String hintText,
+    required bool obscure,
+    required TextEditingController controller,
+  }) {
     return TextField(
+      controller: controller,
       obscureText: obscure,
       decoration: InputDecoration(
         hintText: hintText,
@@ -181,8 +252,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           color: Colors.white,
           fontWeight: FontWeight.w600,
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+        contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(30),
           borderSide: const BorderSide(color: Color(0xFF3D5A80), width: 1.5),

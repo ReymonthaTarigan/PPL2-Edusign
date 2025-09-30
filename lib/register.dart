@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'login.dart';
 import 'auth.dart';
 import 'verify.dart';
 
@@ -22,32 +21,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final Auth _auth = Auth();
-
-  Future<void> _signUp() async {
-    if (_passwordController.text != _confirmPasswordController.text) {
-      setState(() {
-        errorMessage = "Password dan Konfirmasi Password tidak sama.";
-      });
-      return;
-    }
-
-    try {
-      await Auth().signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      // Kalau berhasil, arahkan ke login
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
-    } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,23 +173,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       elevation: 4,
                     ),
                     onPressed: () async {
-                      try {
-                        final user = await _auth.signUp(
-                          email: _emailController.text.trim(),
-                          password: _passwordController.text.trim(),
-                        );
+                      if (_passwordController.text.trim() == _confirmPasswordController.text.trim()){
+                        try {
+                          final user = await _auth.signUp(
+                            email: _emailController.text.trim(),
+                            password: _passwordController.text.trim(),
+                          );
 
-                        if (user != null) {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(builder: (context) => const VerifyScreen()),
+                          if (user != null) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (context) => const VerifyScreen()),
+                            );
+                          }
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Error: $e")),
                           );
                         }
-                      } catch (e) {
+                      }
+                      else{
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("Error: $e")),
+                          SnackBar(content: Text("Error: password tidak sama!")),
                         );
                       }
+                        
                     },
                     child: const Text(
                       "Daftar",

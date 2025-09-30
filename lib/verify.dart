@@ -1,7 +1,46 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'login.dart';
+import 'auth.dart';
 
-class VerifyScreen extends StatelessWidget {
+class VerifyScreen extends StatefulWidget {
   const VerifyScreen({super.key});
+
+  @override
+  State<VerifyScreen> createState() => _VerifyScreenState();
+}
+
+class _VerifyScreenState extends State<VerifyScreen> {
+  final _auth = FirebaseAuth.instance;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      await _auth.currentUser?.reload();
+      if (_auth.currentUser?.emailVerified ?? false) {
+        timer?.cancel();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Email berhasil diverifikasi! Mengarahkan ke halaman log in...")),
+          );
+          await Future.delayed(const Duration(milliseconds: 1500));
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,15 +60,14 @@ class VerifyScreen extends StatelessWidget {
         child: Center(
           child: Column(
             children: [
-              // Bagian tengah
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 30),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 150),
-                      const Text(
+                      SizedBox(height: 150),
+                      Text(
                         "EDUSIGN",
                         style: TextStyle(
                           fontSize: 64,
@@ -37,31 +75,15 @@ class VerifyScreen extends StatelessWidget {
                           color: Color(0xFF3D5A80),
                         ),
                       ),
-                      const SizedBox(height: 20),
-
-                      // Pesan verifikasi
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 15,
-                          horizontal: 20,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFA6C9E0),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Text(
-                          "Verifikasi Email\nBerhasil Dikirim",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                      SizedBox(height: 20),
+                      Text(
+                        "Email berhasil dikirim!\nSilakan cek email Anda dan klik link verifikasi.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.black87,
                         ),
                       ),
-                      const SizedBox(height: 80),
-
-                      // Tombol Kirim Ulang
                       SizedBox(
                         width: 300,
                         height: 50,
@@ -73,8 +95,16 @@ class VerifyScreen extends StatelessWidget {
                             ),
                             elevation: 4,
                           ),
-                          onPressed: () {
-                            // kirim ulang verifikasi
+                          onPressed:() async { 
+                            try { 
+                              await Auth().sendEmailVerification(); 
+                              ScaffoldMessenger.of(context).showSnackBar( 
+                                const SnackBar(content: Text("Email verifikasi dikirim ulang")), 
+                                ); 
+                            } catch (e) { 
+                              ScaffoldMessenger.of(context).showSnackBar( SnackBar(content: Text("Error: $e")), 
+                              ); 
+                            }
                           },
                           child: const Text(
                             "Kirim Ulang",
@@ -90,38 +120,7 @@ class VerifyScreen extends StatelessWidget {
                   ),
                 ),
               ),
-
-              // Bagian bawah -> kembali ke login
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "Kembali ke ",
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF3D5A80),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                      },
-                      child: const Text(
-                        "Login",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF3D5A80),
-                          decoration: TextDecoration.underline,
-                          decorationThickness: 2,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 40),
             ],
           ),
         ),

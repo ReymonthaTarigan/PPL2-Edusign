@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'frontpage.dart';
+import 'auth.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -50,7 +51,8 @@ class HomePage extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        onPressed: () {
+                        onPressed: () async {
+                          await Auth().signOut();
                           Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(

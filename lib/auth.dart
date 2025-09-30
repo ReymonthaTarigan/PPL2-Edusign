@@ -20,10 +20,20 @@ class Auth {
 
     final user = result.user;
     if (user != null && !user.emailVerified) {
-      await user.sendEmailVerification();
+      await user.sendEmailVerification(); // kirim email verifikasi
     }
 
     return user;
+  }
+
+  Future<User?> signIn({
+    required String email,
+    required String password,
+  }) async {
+    await _firebaseAuth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
   }
 
   Future<void> saveUserData({
@@ -32,13 +42,17 @@ class Auth {
     required String jenjang,
     required String email,
   }) async {
-    await FirebaseFirestore.instance.collection("users").doc(uid).set({
-      "uid": uid,
-      "name": name,
-      "jenjang": jenjang,
-      "email": email,
-      "createdAt": FieldValue.serverTimestamp(),
-    });
+    final doc = _firestore.collection('users').doc(uid);
+
+    final snapshot = await doc.get();
+    if (!snapshot.exists) {
+      await doc.set({
+        'name': name,
+        'jenjang': jenjang,
+        'email': email,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
   }
 
   Future<void> sendEmailVerification() async {

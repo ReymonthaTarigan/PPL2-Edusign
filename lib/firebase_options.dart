@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -65,4 +62,15 @@ class DefaultFirebaseOptions {
     storageBucket: 'edusign-433e2.firebasestorage.app',
     iosBundleId: 'com.example.eduSign',
   );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyCo9U4u3Eys54dzrePnkx1tRzBNxJSp_cY',
+    appId: '1:104984231168:web:61e971fceeb14338b8c7e5',
+    messagingSenderId: '104984231168',
+    projectId: 'edusign-433e2',
+    authDomain: 'edusign-433e2.firebaseapp.com',
+    storageBucket: 'edusign-433e2.firebasestorage.app',
+    measurementId: 'G-YBMRXHWLL7',
+  );
+
 }

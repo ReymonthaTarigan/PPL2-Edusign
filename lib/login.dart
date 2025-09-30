@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'forgot.dart';
 import 'register.dart';
+import 'homepage.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -84,6 +85,12 @@ class LoginScreen extends StatelessWidget {
                           ),
                           onPressed: () {
                             // aksi login
+                            Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const HomePage()),
+                            (route) => false,
+                          );
                           },
                           child: const Text(
                             "Login",

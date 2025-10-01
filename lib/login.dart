@@ -17,77 +17,93 @@ class _LoginScreenState extends State<LoginScreen> {
   final Auth _auth = Auth();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  
-  // State untuk mengontrol tampilan loading
+
   bool _isLoading = false;
 
   Future<void> signIn() async {
-    // 1. Tampilkan loading indicator
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Email dan password tidak boleh kosong.")),
+      );
+      return;
+    }
+
+    // validasi format email
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Format email tidak valid.")),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
     try {
-      await _auth.signIn(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+      await _auth.signIn(email: email, password: password);
 
-        final user = _auth.currentUser;
-        if (user != null) {
-          await user.reload();
-          if (user.emailVerified) {
-            // simpan data user ke Firestore
-            await _auth.saveUserData(
-              uid: user.uid,
-              name: "Nama yang diinput di RegisterScreen",
-              jenjang: "Jenjang yang dipilih",
-              email: user.email!,
-            );
-
+      final user = _auth.currentUser;
+      if (user != null) {
+        await user.reload();
+        if (user.emailVerified) {
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 backgroundColor: Colors.green,
                 content: Text('Login Berhasil! Mengalihkan...'),
               ),
             );
-
-            await Future.delayed(const Duration(milliseconds: 1500));
-
+          }
+          await Future.delayed(const Duration(milliseconds: 1500));
+          if (mounted) {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const HomePage()),
             );
-
-          } else {
-
+          }
+        } else {
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 backgroundColor: Colors.red,
                 content: Text('Email anda belum terverifikasi! Anda akan diarahkan ke halaman verifikasi...'),
               ),
             );
-
-            await Future.delayed(const Duration(milliseconds: 1500));
-
+          }
+          await Future.delayed(const Duration(milliseconds: 1500));
+          if (mounted) {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const VerifyScreen()),
             );
           }
         }
-
+      }
     } on FirebaseAuthException catch (e) {
-      // Jika gagal, tampilkan SnackBar error
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
-          content: Text('Login Gagal: ${e.message}'),
-        ),
-      );
-      print("Login Gagal: ${e.message}");
+      String message;
+
+      if (e.code == 'wrong-password' || e.code == 'user-not-found' || e.code == 'invalid-credential') {
+        message = "Email/password salah";
+      } else if (e.code == 'invalid-email') {
+        message = "Format email tidak valid.";
+      } else {
+        message = "Login Gagal: ${e.message}";
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text(message),
+          ),
+        );
+      }
     } finally {
-      // 3. Sembunyikan loading indicator setelah selesai (baik berhasil maupun gagal)
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -108,14 +124,11 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFDFCF9),
       appBar: AppBar(
-        // ... (AppBar Anda tetap sama)
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SafeArea(
@@ -128,10 +141,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // ... (Bagian Teks Judul tetap sama)
                       const SizedBox(height: 150),
-                      const Text("EDUSIGN", style: TextStyle(fontSize: 64, fontWeight: FontWeight.bold, color: Color(0xFF3D5A80))),
-                      const Text("Selamat datang kembali", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFFA6C9E0))),
+                      const Text(
+                        "EDUSIGN",
+                        style: TextStyle(
+                          fontSize: 64,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF3D5A80),
+                        ),
+                      ),
+                      const Text(
+                        "Selamat datang kembali",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFA6C9E0),
+                        ),
+                      ),
                       const SizedBox(height: 40),
 
                       // Input Email
@@ -169,12 +195,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             elevation: 4,
                           ),
-                          // 4. Nonaktifkan tombol saat loading, lalu panggil signIn
                           onPressed: _isLoading ? null : signIn,
                           child: _isLoading
-                              ? const CircularProgressIndicator(
-                                  color: Colors.white,
-                                )
+                              ? const CircularProgressIndicator(color: Colors.white)
                               : const Text(
                                   "Login",
                                   style: TextStyle(
@@ -185,29 +208,58 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      
-                      // ... (Sisa UI Anda tetap sama)
+
+                      // Lupa password
                       TextButton(
                         onPressed: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()));
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+                          );
                         },
-                        child: const Text("Lupa password?", style: TextStyle(fontSize: 14, color: Colors.black87, decoration: TextDecoration.underline, decorationThickness: 2, fontWeight: FontWeight.w600)),
+                        child: const Text(
+                          "Lupa password?",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                            decoration: TextDecoration.underline,
+                            decorationThickness: 2,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
+
+              // Bagian bawah: Register
               Padding(
                 padding: const EdgeInsets.only(bottom: 20),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Belum punya akun? ", style: TextStyle(fontSize: 14, color: Color(0xFF3D5A80))),
+                    const Text(
+                      "Belum punya akun? ",
+                      style: TextStyle(fontSize: 14, color: Color(0xFF3D5A80)),
+                    ),
                     GestureDetector(
                       onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterScreen()));
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                        );
                       },
-                      child: const Text("Daftar", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF3D5A80), decoration: TextDecoration.underline, decorationThickness: 2)),
+                      child: const Text(
+                        "Daftar",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF3D5A80),
+                          decoration: TextDecoration.underline,
+                          decorationThickness: 2,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -219,12 +271,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // Custom TextField
   Widget _buildTextField({
     required TextEditingController controller,
     required String hintText,
     required bool obscure,
   }) {
-    // ... (Fungsi _buildTextField Anda tetap sama)
     return SizedBox(
       height: 50,
       child: TextField(
@@ -234,7 +286,10 @@ class _LoginScreenState extends State<LoginScreen> {
           hintText: hintText,
           filled: true,
           fillColor: const Color(0xFFA6C9E0),
-          hintStyle: const TextStyle(color: Color(0xFFE0FBFC), fontWeight: FontWeight.w600),
+          hintStyle: const TextStyle(
+            color: Color(0xFFE0FBFC),
+            fontWeight: FontWeight.w600,
+          ),
           contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30),

@@ -34,6 +34,7 @@ class Auth {
       email: email,
       password: password,
     );
+    return null;
   }
 
   Future<void> saveUserData({

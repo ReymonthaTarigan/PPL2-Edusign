@@ -1,8 +1,72 @@
 import 'package:flutter/material.dart';
-import 'verify.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'login.dart';
 
-class ForgotPasswordScreen extends StatelessWidget {
+class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final _auth = FirebaseAuth.instance;
+  bool _isLoading = false;
+
+  Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
+
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Email tidak boleh kosong.")),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Email telah dikirim. Mengarahkan ke halaman login..."),
+          ),
+        );
+
+        await Future.delayed(const Duration(milliseconds: 1500));
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String msg = "Terjadi kesalahan.";
+      if (e.code == "invalid-email") {
+        msg = "Format email tidak valid.";
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $msg")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +116,10 @@ class ForgotPasswordScreen extends StatelessWidget {
                       SizedBox(
                         width: 300,
                         height: 50,
-                        child: _buildTextField(hintText: "Email"),
+                        child: _buildTextField(
+                          controller: _emailController,
+                          hintText: "Email",
+                        ),
                       ),
                       const SizedBox(height: 30),
 
@@ -69,22 +136,18 @@ class ForgotPasswordScreen extends StatelessWidget {
                             ),
                             elevation: 4,
                           ),
-                          onPressed: () {
-                            //tambahin si email verif disini ntar
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const VerifyScreen(),
-                              ),
-                            );
-                          },
-                          child: const Text(
-                            "Kirim Verifikasi",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          onPressed: _isLoading ? null : _resetPassword,
+                          child: _isLoading
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white,
+                                )
+                              : const Text(
+                                  "Kirim Verifikasi",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                         ),
                       ),
                     ],
@@ -131,8 +194,12 @@ class ForgotPasswordScreen extends StatelessWidget {
   }
 
   // Custom TextField
-  Widget _buildTextField({required String hintText}) {
+  Widget _buildTextField({
+    required String hintText,
+    required TextEditingController controller,
+  }) {
     return TextField(
+      controller: controller,
       decoration: InputDecoration(
         hintText: hintText,
         filled: true,

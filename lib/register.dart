@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'auth.dart';
 import 'verify.dart';
 
@@ -12,6 +13,7 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   String? selectedJenjang;
   String? errorMessage = '';
+  bool _isLoading = false; // ⬅️ state untuk loading
 
   final List<String> jenjangList = ["SD", "SMP", "SMA"];
 
@@ -60,7 +62,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 40),
 
-                // Nama
+                // Form input (nama, jenjang, email, password)
                 SizedBox(
                   width: 300,
                   height: 50,
@@ -71,7 +73,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Jenjang Pendidikan
+                // Dropdown Jenjang Pendidikan
                 SizedBox(
                   width: 300,
                   height: 50,
@@ -159,54 +161,95 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 40),
 
-                // Tombol Daftar
+                // Tombol Daftar / Loading
                 SizedBox(
                   width: 300,
                   height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3D5A80),
-                      foregroundColor: const Color(0xFFFAF9F6),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      elevation: 4,
-                    ),
-                    onPressed: () async {
-                      if (_passwordController.text.trim() == _confirmPasswordController.text.trim()){
-                        try {
-                          final user = await _auth.signUp(
-                            email: _emailController.text.trim(),
-                            password: _passwordController.text.trim(),
-                          );
-
-                          if (user != null) {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (context) => const VerifyScreen()),
-                            );
-                          }
-                        } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Error: $e")),
-                          );
-                        }
-                      }
-                      else{
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("Error: password tidak sama!")),
-                        );
-                      }
-                        
-                    },
-                    child: const Text(
-                      "Daftar",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF3D5A80),
+                          ),
+                        )
+                      : ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3D5A80),
+                            foregroundColor: const Color(0xFFFAF9F6),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            elevation: 4,
+                          ),
+                          onPressed: () async {
+                            if (_passwordController.text.isEmpty ||
+                                _confirmPasswordController.text.isEmpty ||
+                                _namaController.text.isEmpty ||
+                                _emailController.text.isEmpty ||
+                                selectedJenjang == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Error: Pastikan semua data terisi!")),
+                              );
+                            } else {
+                              if (_passwordController.text.trim() ==
+                                  _confirmPasswordController.text.trim()) {
+                                setState(() {
+                                  _isLoading = true;
+                                });
+                                try {
+                                  final user = await _auth.signUp(
+                                    email: _emailController.text.trim(),
+                                    password: _passwordController.text.trim(),
+                                  );
+                                  if (user != null) {
+                                    await _auth.saveUserData(
+                                      uid: user.uid,
+                                      name: _namaController.text.trim(),
+                                      jenjang: selectedJenjang ?? "",
+                                      email: user.email!,
+                                    );
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(builder: (context) => const VerifyScreen()),
+                                    );
+                                  }
+                                } on FirebaseAuthException catch (e) {
+                                  String msg = "Terjadi kesalahan";
+                                  if (e.code == "email-already-in-use") {
+                                    msg = "Email sudah terdaftar, silakan gunakan email lain.";
+                                  } else if (e.code == "invalid-email") {
+                                    msg = "Format email tidak valid.";
+                                  } else if (e.code == "weak-password") {
+                                    msg = "Password terlalu lemah, gunakan minimal 6 karakter.";
+                                  }
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text("Error: $msg")),
+                                  );
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text("Error: $e")),
+                                  );
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      _isLoading = false;
+                                    });
+                                  }
+                                }
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Error: password tidak sama!")),
+                                );
+                              }
+                            }
+                          },
+                          child: const Text(
+                            "Daftar",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -215,6 +258,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
   }
+
 
   // Custom TextField
   Widget _buildTextField({

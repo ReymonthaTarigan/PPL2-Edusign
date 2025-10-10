@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'frontpage.dart';
 import 'auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'getService/getvid.dart';
+
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -8,219 +10,231 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE0E0E0),
+      backgroundColor: const Color(0xFFFAF9F6),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF4A90E2), Color(0xFF5B6EB5)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // Header Gradient
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF98C1D9), Color(0xFF3D5A80)],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(20),
+                  ),
                 ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(24),
-                  bottomRight: Radius.circular(24),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Salam + tombol logout
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        "Hi, -",
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[900],
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Hi, -",
+                          style: TextStyle(
+                            fontSize: 28,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        onPressed: () async {
-                          await Auth().signOut();
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => const FrontPage()),
-                            (route) => false,
-                          );
-                        },
-                        child: const Text(
-                          "Logout",
-                          style: TextStyle(color: Colors.white),
+                        ElevatedButton(
+                          onPressed: () async {
+                            await Auth().signOut();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue[900],
+                          ),
+                          child: const Text("Logout"),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Search bar
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: const TextField(
-                      decoration: InputDecoration(
-                        hintText: "Hinted search text",
-                        border: InputBorder.none,
-                        prefixIcon: Icon(Icons.menu),
-                        suffixIcon: Icon(Icons.search),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Grid kategori
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: GridView.count(
-                crossAxisCount: 3,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                children: List.generate(6, (index) {
-                  return Column(
-                    children: [
-                      Container(
-                        width: 70,
-                        height: 70,
-                        decoration: BoxDecoration(
-                          color: Color(0xFFEE6C4D),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.black, width: 1),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text("Category"),
-                    ],
-                  );
-                }),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Recently viewed
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Text(
-                    "Recently Viewed",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    "See All",
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.blue,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          height: 100,
-                          color: Colors.black,
-                        ),
-                        const SizedBox(height: 8),
-                        const Text("Title"),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          height: 100,
-                          color: Colors.black,
+                    const SizedBox(height: 16),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      child: const TextField(
+                        decoration: InputDecoration(
+                          hintText: "Hinted search text",
+                          prefixIcon: Icon(Icons.menu),
+                          suffixIcon: Icon(Icons.search),
+                          border: InputBorder.none,
                         ),
-                        const SizedBox(height: 8),
-                        const Text("Title"),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+
+              // Category grid
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: GridView.count(
+                  crossAxisCount: 3,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    for (final color in [
+                      Colors.amber,
+                      Colors.green,
+                      Colors.blue,
+                      Colors.red,
+                      Colors.purple,
+                      Colors.orange,
+                    ])
+                      Column(
+                        children: [
+                          Container(
+                            width: 67,
+                            height: 67,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 8,
+                                  offset: Offset(0, 4),
+                                )
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text("Category"),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Recently Viewed Section
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: const [
+                    Text("Recently Viewed",
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text("See All", style: TextStyle(color: Colors.blue)),
+                  ],
+                ),
+              ),
+
+              // Stream dari Firestore
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('videos').snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const Center(child: Text("No videos found"));
+                    }
+
+                    final videos = snapshot.data!.docs;
+
+                    String? getYoutubeThumbnail(String url) {
+                      final uri = Uri.parse(url);
+                      String? videoId;
+
+                      if (uri.host.contains('youtu.be')) {
+                        videoId = uri.pathSegments.first;
+                      } else if (uri.host.contains('youtube.com')) {
+                        videoId = uri.queryParameters['v'];
+                      }
+
+                      return videoId != null
+                          ? 'https://img.youtube.com/vi/$videoId/hqdefault.jpg'
+                          : null;
+                    }
+
+                    return Column(
+                      children: videos.map((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final title = data['title'] ?? 'Untitled';
+                        final link = data['link'] ?? '';
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 20),
+                          child: VideoCard(
+                            title: title,
+                            link: link,
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+              ),
+
+
+              const SizedBox(height: 12),
+
+              // Placeholder video section
+              // Padding(
+              //   padding: const EdgeInsets.symmetric(horizontal: 24),
+              //   child: Row(
+              //     children: [
+              //       Expanded(
+              //         child: Column(
+              //           children: [
+              //             Container(
+              //               height: 100,
+              //               color: Colors.black,
+              //             ),
+              //             const SizedBox(height: 6),
+              //             const Text("Title"),
+              //           ],
+              //         ),
+              //       ),
+              //       const SizedBox(width: 16),
+              //       Expanded(
+              //         child: Column(
+              //           children: [
+              //             Container(
+              //               height: 100,
+              //               color: Colors.black,
+              //             ),
+              //             const SizedBox(height: 6),
+              //             const Text("Title"),
+              //           ],
+              //         ),
+              //       ),
+              //     ],
+              //   ),
+              // ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
 
-      // Bottom Navigation
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF4A90E2), Color(0xFF5B6EB5)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-        ),
-        child: BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedItemColor: Colors.blue[900],
-          unselectedItemColor: Colors.black54,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: "Home",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.book),
-              label: "Subject",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.assignment),
-              label: "Forms",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: "Profile",
-            ),
-          ],
-        ),
+      // Bottom Navigation Bar
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 0,
+        selectedItemColor: Colors.blue[900],
+        unselectedItemColor: Colors.black54,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Subject'),
+          BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'Forms'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
       ),
     );
   }

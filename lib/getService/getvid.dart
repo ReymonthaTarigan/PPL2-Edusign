@@ -1,68 +1,98 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'getdetail.dart';
 
 class VideoCard extends StatelessWidget {
   final String title;
   final String link;
 
-  const VideoCard({super.key, required this.title, required this.link});
+  const VideoCard({
+    super.key,
+    required this.title,
+    required this.link,
+  });
 
-  String getYoutubeThumbnail(String url) {
-    try {
-      final uri = Uri.parse(url);
-      final videoId = uri.pathSegments.last.split('?').first;
-      return 'https://img.youtube.com/vi/$videoId/0.jpg';
-    } catch (e) {
-      return 'https://via.placeholder.com/120x90?text=No+Thumbnail';
+  String? getYoutubeThumbnail(String url) {
+    final uri = Uri.parse(url);
+    String? videoId;
+
+    if (uri.host.contains('youtu.be')) {
+      videoId = uri.pathSegments.first;
+    } else if (uri.host.contains('youtube.com')) {
+      videoId = uri.queryParameters['v'];
     }
+
+    return videoId != null
+        ? 'https://img.youtube.com/vi/$videoId/hqdefault.jpg'
+        : null;
   }
 
   @override
   Widget build(BuildContext context) {
+    final thumbnail = getYoutubeThumbnail(link);
+
     return GestureDetector(
-      onTap: () {
-        // Navigasi ke halaman detail
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => VideoDetailPage(
-              title: title,
-              link: link,
+      onTap: () async {
+        // 🔹 Ambil detail video dari Firestore berdasarkan link/title
+        final videoDoc = await FirebaseFirestore.instance
+            .collection('videos')
+            .where('link', isEqualTo: link)
+            .get();
+
+        if (videoDoc.docs.isNotEmpty) {
+          final data = videoDoc.docs.first.data();
+
+          // 🔹 Ambil data lengkap dari Firestore
+          final signLangUrl = data['signLanguage'] ?? '';
+          final subtitle = data['subtitle'] ?? '';
+
+          // 🔹 Navigasi ke halaman detail video
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoDetailPage(
+                title: title,
+                videoUrl: link, // ✅ ini yang dulu belum ada
+                signLangUrl: signLangUrl,
+                subtitle: subtitle,
+              ),
             ),
-          ),
-        );
+          );
+        }
       },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
+      child: Card(
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (thumbnail != null)
               ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(12)),
                 child: Image.network(
-                  getYoutubeThumbnail(link),
+                  thumbnail,
+                  fit: BoxFit.cover,
                   height: 180,
                   width: double.infinity,
-                  fit: BoxFit.cover,
                 ),
               ),
-              const Icon(
-                Icons.play_circle_fill,
-                size: 60,
-                color: Colors.white,
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

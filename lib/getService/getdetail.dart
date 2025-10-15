@@ -1,103 +1,124 @@
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
-import 'youtube_service.dart';
-
 
 class VideoDetailPage extends StatefulWidget {
   final String title;
-  final String link;
+  final String videoUrl;
+  final String? signLangUrl;
+  final String? subtitle;
 
   const VideoDetailPage({
     super.key,
     required this.title,
-    required this.link,
+    required this.videoUrl,
+    this.signLangUrl,
+    this.subtitle,
   });
-
 
   @override
   State<VideoDetailPage> createState() => _VideoDetailPageState();
 }
+
 class _VideoDetailPageState extends State<VideoDetailPage> {
-  late YoutubePlayerController _controller;
-  Map<String, dynamic>? videoData;
-  bool isLoading = true;
+  late YoutubePlayerController _youtubeController;
+  VideoPlayerController? _signLangController;
+  bool _showSubtitle = true;
 
   @override
   void initState() {
     super.initState();
-    _loadVideoData();
-  }
 
-  Future<void> _loadVideoData() async {
-    final service = YouTubeService();
-    final data = await service.fetchVideoDetails(widget.link);
-
-    final videoId = YoutubePlayer.convertUrlToId(widget.link);
-    _controller = YoutubePlayerController(
+    final videoId = YoutubePlayer.convertUrlToId(widget.videoUrl);
+    _youtubeController = YoutubePlayerController(
       initialVideoId: videoId ?? '',
-      flags: const YoutubePlayerFlags(autoPlay: false),
-    );
-
-    setState(() {
-      videoData = data;
-      isLoading = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (videoData == null) {
-      return const Scaffold(
-        body: Center(child: Text("Video not found")),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(title: Text(videoData!["title"] ?? "Video")),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            YoutubePlayer(controller: _controller),
-            const SizedBox(height: 16),
-            Text(
-              videoData!["title"],
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              "By ${videoData!["channel"]}",
-              style: const TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.visibility, color: Colors.grey, size: 18),
-                const SizedBox(width: 4),
-                Text("${videoData!["views"]} views"),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              videoData!["description"],
-              style: const TextStyle(fontSize: 15),
-            ),
-          ],
-        ),
+      flags: const YoutubePlayerFlags(
+        autoPlay: true,
+        mute: false,
       ),
     );
+
+    if (widget.signLangUrl != null && widget.signLangUrl!.isNotEmpty) {
+      _signLangController =
+      VideoPlayerController.networkUrl(Uri.parse(widget.signLangUrl!))
+        ..initialize().then((_) {
+          setState(() {});
+          _signLangController!.play();
+        });
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _youtubeController.dispose();
+    _signLangController?.dispose();
     super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+        backgroundColor: Colors.blue[900],
+      ),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              YoutubePlayer(
+                controller: _youtubeController,
+                showVideoProgressIndicator: true,
+              ),
+              const SizedBox(height: 8),
+
+              // Tombol Subtitle
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _showSubtitle = !_showSubtitle;
+                  });
+                },
+                child: Text(
+                  _showSubtitle ? "Hide Subtitle" : "Show Subtitle",
+                  style: const TextStyle(color: Colors.blue),
+                ),
+              ),
+
+              if (_showSubtitle && widget.subtitle != null)
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Text(
+                    widget.subtitle!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.black87,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+
+          // Video Bahasa Isyarat
+          if (_signLangController != null &&
+              _signLangController!.value.isInitialized)
+            Positioned(
+              bottom: 100,
+              right: 20,
+              width: 120,
+              height: 160,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: _signLangController!.value.aspectRatio,
+                  child: VideoPlayer(_signLangController!),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

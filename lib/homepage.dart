@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'getService/getvid.dart';
-
+import 'getService/getdetail.dart';
+import 'auth.dart';
+import 'setting.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -14,8 +14,9 @@ class HomePage extends StatelessWidget {
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Gradient
+              // HEADER
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -33,27 +34,34 @@ class HomePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          "Hi, -",
-                          style: TextStyle(
+                    StreamBuilder<DocumentSnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(Auth().currentUser?.uid)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Text(
+                            "Hi, -",
+                            style: TextStyle(
+                              fontSize: 28,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          );
+                        }
+                        final userData =
+                        snapshot.data!.data() as Map<String, dynamic>?;
+                        final name = userData?['name'] ?? '-';
+                        return Text(
+                          "Hi, $name",
+                          style: const TextStyle(
                             fontSize: 28,
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                           ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () async {
-                            await Auth().signOut();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue[900],
-                          ),
-                          child: const Text("Logout"),
-                        ),
-                      ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
                     Container(
@@ -73,107 +81,100 @@ class HomePage extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
 
-              // Category grid
+              const SizedBox(height: 30),
+
+              // CATEGORY SECTION
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: GridView.count(
-                  crossAxisCount: 3,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 30,
+                  runSpacing: 30,
                   children: [
-                    for (final color in [
-                      Colors.amber,
-                      Colors.green,
-                      Colors.blue,
-                      Colors.red,
-                      Colors.purple,
-                      Colors.orange,
-                    ])
-                      Column(
-                        children: [
-                          Container(
-                            width: 67,
-                            height: 67,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black26,
-                                  blurRadius: 8,
-                                  offset: Offset(0, 4),
-                                )
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text("Category"),
-                        ],
-                      ),
+                    _buildCategory(Colors.amber[700]!),
+                    _buildCategory(Colors.green),
+                    _buildCategory(Colors.blue),
+                    _buildCategory(Colors.red),
+                    _buildCategory(Colors.purple),
+                    _buildCategory(Colors.deepOrange),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 40),
 
-              // Recently Viewed Section
+              // RECENTLY VIEWED
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: const [
-                    Text("Recently Viewed",
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text("See All", style: TextStyle(color: Colors.blue)),
+                    Text(
+                      "Recently Viewed",
+                      style:
+                      TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
+                    ),
+                    Text(
+                      "See All",
+                      style: TextStyle(color: Colors.blue, fontSize: 18),
+                    ),
                   ],
                 ),
               ),
 
-              // Stream dari Firestore
+              // 🔹 VIDEO LIST
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('videos').snapshots(),
+                  stream: FirebaseFirestore.instance
+                      .collection('videos')
+                      .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
-
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return const Center(child: Text("No videos found"));
+                      return const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text("No videos available"),
+                      );
                     }
 
                     final videos = snapshot.data!.docs;
-
-                    String? getYoutubeThumbnail(String url) {
-                      final uri = Uri.parse(url);
-                      String? videoId;
-
-                      if (uri.host.contains('youtu.be')) {
-                        videoId = uri.pathSegments.first;
-                      } else if (uri.host.contains('youtube.com')) {
-                        videoId = uri.queryParameters['v'];
-                      }
-
-                      return videoId != null
-                          ? 'https://img.youtube.com/vi/$videoId/hqdefault.jpg'
-                          : null;
-                    }
-
                     return Column(
                       children: videos.map((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         final title = data['title'] ?? 'Untitled';
                         final link = data['link'] ?? '';
+                        final signLang = data['signLanguage'];
+                        final subtitle = data['subtitle'];
 
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 20),
-                          child: VideoCard(
-                            title: title,
-                            link: link,
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 4,
+                          child: ListTile(
+                            leading: const Icon(Icons.play_circle_fill,
+                                color: Colors.blue, size: 40),
+                            title: Text(title),
+                            subtitle: const Text("Tap to watch"),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => VideoDetailPage(
+                                    title: title,
+                                    videoUrl: link,
+                                    signLangUrl: signLang,
+                                    subtitle: subtitle,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         );
                       }).toList(),
@@ -182,53 +183,23 @@ class HomePage extends StatelessWidget {
                 ),
               ),
 
-
-              const SizedBox(height: 12),
-
-              // Placeholder video section
-              // Padding(
-              //   padding: const EdgeInsets.symmetric(horizontal: 24),
-              //   child: Row(
-              //     children: [
-              //       Expanded(
-              //         child: Column(
-              //           children: [
-              //             Container(
-              //               height: 100,
-              //               color: Colors.black,
-              //             ),
-              //             const SizedBox(height: 6),
-              //             const Text("Title"),
-              //           ],
-              //         ),
-              //       ),
-              //       const SizedBox(width: 16),
-              //       Expanded(
-              //         child: Column(
-              //           children: [
-              //             Container(
-              //               height: 100,
-              //               color: Colors.black,
-              //             ),
-              //             const SizedBox(height: 6),
-              //             const Text("Title"),
-              //           ],
-              //         ),
-              //       ),
-              //     ],
-              //   ),
-              // ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
             ],
           ),
         ),
       ),
-
-      // Bottom Navigation Bar
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 0,
         selectedItemColor: Colors.blue[900],
         unselectedItemColor: Colors.black54,
+        onTap: (index) {
+          if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => ProfilePage()),
+            );
+          }
+        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Subject'),
@@ -236,6 +207,33 @@ class HomePage extends StatelessWidget {
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
+    );
+  }
+
+  Widget _buildCategory(Color color) {
+    return Column(
+      children: [
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black26,
+                offset: Offset(2, 4),
+                blurRadius: 4,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "Category",
+          style: TextStyle(fontSize: 16),
+        ),
+      ],
     );
   }
 }

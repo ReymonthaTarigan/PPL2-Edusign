@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'getService/getdetail.dart';
 import 'auth.dart';
+import 'forum.dart';
 import 'setting.dart';
 
 class HomePage extends StatelessWidget {
@@ -193,17 +194,22 @@ class HomePage extends StatelessWidget {
         selectedItemColor: Colors.blue[900],
         unselectedItemColor: Colors.black54,
         onTap: (index) {
-          if (index == 3) {
+          if (index == 2) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => ProfilePage()),
+              MaterialPageRoute(builder: (context) => const ForumPage()),
+            );
+          } else if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ProfilePage()),
             );
           }
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Subject'),
-          BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'Forms'),
+          BottomNavigationBarItem(icon: Icon(Icons.forum), label: 'Forum'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),

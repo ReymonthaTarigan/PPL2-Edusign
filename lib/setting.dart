@@ -3,9 +3,7 @@ import 'package:edu_sign/frontpage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'homepage.dart';
-// import 'subject.dart';
-// import 'forms.dart';
-
+import 'forum.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -81,16 +79,11 @@ class _ProfilePageState extends State<ProfilePage> {
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
       );
-    // } else if (index == 1) {
-    //   Navigator.pushReplacement(
-    //     context,
-    //     MaterialPageRoute(builder: (context) => const SubjectPage()),
-    //   );
-    // } else if (index == 2) {
-    //   Navigator.pushReplacement(
-    //     context,
-    //     MaterialPageRoute(builder: (context) => const FormsPage()),
-    //   );
+    } else if (index == 2) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const ForumPage()), // ⬅️ Navigasi ke Forum
+      );
     }
   }
 
@@ -103,51 +96,51 @@ class _ProfilePageState extends State<ProfilePage> {
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
             : Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Settings",
-                style:
-                TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Settings",
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 🔹 Foto profil + data user
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const CircleAvatar(
+                          radius: 30,
+                          backgroundColor: Colors.grey,
+                        ),
+                        const SizedBox(width: 16),
+
+                        // 🔹 Data user dari Firestore
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildAutoFitText(w, "NAMA : $name"),
+                            _buildAutoFitText(w, "JENJANG : $jenjang"),
+                            _buildAutoFitText(w, "EMAIL : $email"),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 30),
+
+                    const Divider(),
+                    _buildMenuItem("Log Out", onTap: _logout),
+                    const Divider(),
+                    _buildMenuItem("Terms and Conditions"),
+                    const Divider(),
+                    _buildMenuItem("Privacy and Policy"),
+                    const Divider(),
+                    _buildMenuItem("Credits"),
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
-
-              // 🔹 Foto profil + data user
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.grey,
-                  ),
-                  const SizedBox(width: 16),
-
-                  // 🔹 Data user dari Firestore
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildAutoFitText(w, "NAMA : $name"),
-                      _buildAutoFitText(w, "JENJANG : $jenjang"),
-                      _buildAutoFitText(w, "EMAIL : $email"),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 30),
-
-              const Divider(),
-              _buildMenuItem("Log Out", onTap: _logout),
-              const Divider(),
-              _buildMenuItem("Terms and Conditions"),
-              const Divider(),
-              _buildMenuItem("Privacy and Policy"),
-              const Divider(),
-              _buildMenuItem("Credits"),
-            ],
-          ),
-        ),
       ),
 
       // 🔹 Bottom Navigation Bar
@@ -159,7 +152,7 @@ class _ProfilePageState extends State<ProfilePage> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Subject'),
-          BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'Forms'),
+          BottomNavigationBarItem(icon: Icon(Icons.forum), label: 'Forum'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),

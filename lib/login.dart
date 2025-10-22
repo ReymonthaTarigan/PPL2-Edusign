@@ -1,10 +1,14 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'forgot.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Penting untuk cek admin
+
+// Import semua halaman lain yang Anda perlukan
+import 'auth.dart';
 import 'homepage.dart';
 import 'register.dart';
-import 'auth.dart';
 import 'verify.dart';
+import 'forgot.dart';
+import 'admin_homepage.dart'; // Halaman admin
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,23 +23,16 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _isAdminLogin = false; // State untuk toggle admin
 
+  // --- FUNGSI SIGNIN YANG SUDAH DIPERBARUI TOTAL ---
   Future<void> signIn() async {
-    final email = _emailController.text.trim();
+    final emailOrUsername = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (emailOrUsername.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Email dan password tidak boleh kosong.")),
-      );
-      return;
-    }
-
-    // validasi format email
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-    if (!emailRegex.hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Format email tidak valid.")),
+        const SnackBar(content: Text("Field tidak boleh kosong.")),
       );
       return;
     }
@@ -45,48 +42,122 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await _auth.signIn(email: email, password: password);
+      if (_isAdminLogin) {
+        // --- LOGIKA BARU: LOGIN SEBAGAI ADMIN ---
 
-      final user = _auth.currentUser;
-      if (user != null) {
-        await user.reload();
-        if (user.emailVerified) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                backgroundColor: Colors.green,
-                content: Text('Login Berhasil! Mengalihkan...'),
-              ),
-            );
-          }
-          await Future.delayed(const Duration(milliseconds: 1500));
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const HomePage()),
-            );
-          }
-        } else {
+        // 1. Query koleksi 'admins' untuk mencari username
+        final adminQuery = await FirebaseFirestore.instance
+            .collection('admins')
+            .where('username', isEqualTo: emailOrUsername)
+            .limit(1)
+            .get();
+
+        if (adminQuery.docs.isEmpty) {
+          // 2. Jika username admin tidak ditemukan
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 backgroundColor: Colors.red,
-                content: Text('Email anda belum terverifikasi! Anda akan diarahkan ke halaman verifikasi...'),
+                content: Text('Username admin tidak ditemukan.'),
               ),
             );
           }
-          await Future.delayed(const Duration(milliseconds: 1500));
+        } else {
+          // 3. Username ditemukan, cek password
+          final adminData = adminQuery.docs.first.data();
+          final String correctPassword = adminData['password'] as String;
+
+          if (password == correctPassword) {
+            // 4. Password BENAR
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  backgroundColor: Colors.green,
+                  content: Text('Login Admin Berhasil! Mengalihkan...'),
+                ),
+              );
+              await Future.delayed(const Duration(milliseconds: 1500));
+              if (mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AdminHomePage()),
+                );
+              }
+            }
+          } else {
+            // 5. Password SALAH
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  backgroundColor: Colors.red,
+                  content: Text('Password admin salah.'),
+                ),
+              );
+            }
+          }
+        }
+      } else {
+        // --- LOGIKA LAMA: LOGIN SEBAGAI USER BIASA ---
+
+        // 1. Validasi format email (hanya untuk user)
+        final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+        if (!emailRegex.hasMatch(emailOrUsername)) {
           if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const VerifyScreen()),
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Format email tidak valid.")),
             );
+          }
+          // Hentikan loading
+          setState(() { _isLoading = false; }); 
+          return;
+        }
+
+        // 2. Sign in dengan Firebase Auth
+        await _auth.signIn(email: emailOrUsername, password: password);
+        final user = _auth.currentUser;
+
+        if (user != null) {
+          await user.reload();
+          if (user.emailVerified) {
+            // ... (Logika sukses login user) ...
+             if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  backgroundColor: Colors.green,
+                  content: Text('Login Berhasil! Mengalihkan...'),
+                ),
+              );
+            }
+            await Future.delayed(const Duration(milliseconds: 1500));
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const HomePage()),
+              );
+            }
+          } else {
+            // ... (Logika user belum verifikasi) ...
+             if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  backgroundColor: Colors.red,
+                  content: Text('Email anda belum terverifikasi! Anda akan diarahkan ke halaman verifikasi...'),
+                ),
+              );
+            }
+            await Future.delayed(const Duration(milliseconds: 1500));
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const VerifyScreen()),
+              );
+            }
           }
         }
       }
     } on FirebaseAuthException catch (e) {
+      // Blok catch ini sekarang HANYA menangani error dari login USER
       String message;
-
       if (e.code == 'wrong-password' || e.code == 'user-not-found' || e.code == 'invalid-credential') {
         message = "Email/password salah";
       } else if (e.code == 'invalid-email') {
@@ -94,13 +165,16 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         message = "Login Gagal: ${e.message}";
       }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red,
-            content: Text(message),
-          ),
+          SnackBar(backgroundColor: Colors.red, content: Text(message)),
+        );
+      }
+    } catch (e) {
+      // Blok catch umum untuk error lain (misal error Firestore)
+       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: Colors.red, content: Text('Terjadi kesalahan: $e')),
         );
       }
     } finally {
@@ -160,12 +234,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 40),
 
-                      // Input Email
+                      // --- PERUBAHAN HINT TEXT DINAMIS ---
                       SizedBox(
                         width: 300,
                         child: _buildTextField(
                           controller: _emailController,
-                          hintText: "Email",
+                          hintText: _isAdminLogin ? "Username Admin" : "Email",
                           obscure: false,
                         ),
                       ),
@@ -180,7 +254,58 @@ class _LoginScreenState extends State<LoginScreen> {
                           obscure: true,
                         ),
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 10),
+
+                      // Lupa password
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: TextButton(
+                            // Sembunyikan jika login admin
+                            onPressed: _isAdminLogin ? null : () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+                              );
+                            },
+                            child: Text(
+                              "Lupa password?",
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _isAdminLogin ? Colors.grey : Colors.black87,
+                                decoration: TextDecoration.underline,
+                                decorationThickness: 2,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      
+                      // Toggle Login Admin
+                      SizedBox(
+                        width: 300,
+                        child: SwitchListTile(
+                          title: const Text(
+                            "Login sebagai Guru",
+                            style: TextStyle(
+                              color: Color(0xFF3D5A80),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                          value: _isAdminLogin,
+                          onChanged: (bool value) {
+                            setState(() {
+                              _isAdminLogin = value;
+                            });
+                          },
+                          activeColor: const Color(0xFF3D5A80),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
 
                       // Tombol Login
                       SizedBox(
@@ -207,27 +332,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 10),
-
-                      // Lupa password
-                      TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
-                          );
-                        },
-                        child: const Text(
-                          "Lupa password?",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            decoration: TextDecoration.underline,
-                            decorationThickness: 2,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -236,7 +340,8 @@ class _LoginScreenState extends State<LoginScreen> {
               // Bagian bawah: Register
               Padding(
                 padding: const EdgeInsets.only(bottom: 20),
-                child: Row(
+                // Sembunyikan jika login admin
+                child: _isAdminLogin ? const SizedBox(height: 40) : Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Text(

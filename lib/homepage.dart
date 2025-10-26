@@ -4,6 +4,7 @@ import 'getService/getdetail.dart';
 import 'auth.dart';
 import 'forum.dart';
 import 'setting.dart';
+import 'category_videos_page.dart'; // halaman baru untuk kategori
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -17,7 +18,7 @@ class HomePage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // HEADER
+              // 🔹 HEADER
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -72,7 +73,7 @@ class HomePage extends StatelessWidget {
                       ),
                       child: const TextField(
                         decoration: InputDecoration(
-                          hintText: "Hinted search text",
+                          hintText: "Search...",
                           prefixIcon: Icon(Icons.menu),
                           suffixIcon: Icon(Icons.search),
                           border: InputBorder.none,
@@ -85,27 +86,39 @@ class HomePage extends StatelessWidget {
 
               const SizedBox(height: 30),
 
-              // CATEGORY SECTION
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 30,
-                  runSpacing: 30,
-                  children: [
-                    _buildCategory(Colors.amber[700]!),
-                    _buildCategory(Colors.green),
-                    _buildCategory(Colors.blue),
-                    _buildCategory(Colors.red),
-                    _buildCategory(Colors.purple),
-                    _buildCategory(Colors.deepOrange),
-                  ],
+              // 🔹 CATEGORY SCROLL (Horizontal)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  "Subjects",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              SizedBox(
+                height: 120,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      _buildCategory(context, "Matematika", Colors.amber[700]!),
+                      _buildCategory(context, "Bahasa Indonesia", Colors.green),
+                      _buildCategory(context, "IPA", Colors.blue),
+                      _buildCategory(context, "IPS", Colors.red),
+                      _buildCategory(context, "Bahasa Inggris", Colors.purple),
+                      _buildCategory(context, "PPKN", Colors.deepOrange),
+                      _buildCategory(context, "Seni Budaya", Colors.teal),
+                      _buildCategory(context, "PJOK", Colors.brown),
+                    ],
+                  ),
                 ),
               ),
 
               const SizedBox(height: 40),
 
-              // RECENTLY VIEWED
+              // 🔹 RECENTLY VIEWED
               Padding(
                 padding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -129,9 +142,8 @@ class HomePage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('videos')
-                      .snapshots(),
+                  stream:
+                  FirebaseFirestore.instance.collection('videos').snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -189,6 +201,8 @@ class HomePage extends StatelessWidget {
           ),
         ),
       ),
+
+      // 🔹 BOTTOM NAVIGATION
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 0,
         selectedItemColor: Colors.blue[900],
@@ -216,30 +230,44 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildCategory(Color color) {
-    return Column(
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black26,
-                offset: Offset(2, 4),
-                blurRadius: 4,
-              ),
-            ],
+  static Widget _buildCategory(BuildContext context, String title, Color color) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CategoryVideosPage(subject: title),
           ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(right: 16),
+        child: Column(
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    offset: Offset(2, 4),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.book, color: Colors.white, size: 36),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        const Text(
-          "Category",
-          style: TextStyle(fontSize: 16),
-        ),
-      ],
+      ),
     );
   }
 }

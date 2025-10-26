@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'frontpage.dart';
 import 'firebase_options.dart';
+import 'setup_quiz_page.dart'; // Tambahkan ini di atas
+import 'quiz_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +24,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const FrontPage(),
+      home: const SetupQuizPage(), //SetupQuizPage(masukin soal) & QuizPage(nyoba jawab)
     );
   }
 }

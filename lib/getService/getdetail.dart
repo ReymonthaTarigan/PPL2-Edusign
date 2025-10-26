@@ -7,10 +7,9 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 class VideoDetailPage extends StatefulWidget {
   final String title;
-  final String videoUrl;      // YouTube URL atau MP4 langsung
-  final String? signLangUrl;  // MP4 interpreter
-  final String? subtitle;     // URL .srt
-  
+  final String videoUrl;
+  final String? signLangUrl;
+  final String? subtitle;
 
   const VideoDetailPage({
     super.key,
@@ -25,20 +24,34 @@ class VideoDetailPage extends StatefulWidget {
 }
 
 class _VideoDetailPageState extends State<VideoDetailPage> {
-  YoutubePlayerController? _yt;      // player utama jika YouTube
-  VideoPlayerController? _mp4Main;   // player utama jika MP4
-  VideoPlayerController? _signLang;  // overlay interpreter
-
-  // Ticker untuk polling posisi YouTube saat playing
+  YoutubePlayerController? _yt;
+  VideoPlayerController? _mp4Main;
   Timer? _ytTicker;
   static const _tick = Duration(milliseconds: 250);
-
   bool _showSubtitle = true;
 
-  // ==== Subtitle SRT ====
   List<_SrtCue> _cues = [];
   int _lastCueIdx = -1;
   String? _currentSubtitle;
+
+  final List<Comment> _comments = [
+    Comment(
+      name: "Rani Kusuma",
+      avatarUrl: "https://i.pravatar.cc/150?img=3",
+      text: "Videonya sangat informatif!",
+      replies: [
+        Comment(
+          name: "Bima Setiawan",
+          avatarUrl: "https://i.pravatar.cc/150?img=12",
+          text: "Setuju banget, apalagi bagian penjelasan terakhir.",
+        ),
+      ],
+    ),
+  ];
+
+  final TextEditingController _commentController = TextEditingController();
+  Comment? _replyingTo;
+  final Map<Comment, bool> _showReplies = {};
 
   bool get _isYouTube {
     final u = Uri.tryParse(widget.videoUrl);
@@ -61,13 +74,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   @override
   void initState() {
     super.initState();
-
     _loadSrtFromUrl(widget.subtitle);
-
-    if ((widget.signLangUrl ?? '').isNotEmpty) {
-      _signLang = VideoPlayerController.networkUrl(Uri.parse(widget.signLangUrl!))
-        ..initialize().then((_) => setState(() {}));
-    }
 
     if (_isYouTube) {
       final id = _extractId(widget.videoUrl);
@@ -91,7 +98,6 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     }
   }
 
-  // ---------- SUBTITLE ----------
   Future<void> _loadSrtFromUrl(String? url) async {
     if (url == null || url.isEmpty) return;
     try {
@@ -124,8 +130,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     while (i < lines.length) {
       while (i < lines.length && lines[i].trim().isEmpty) i++;
       if (i >= lines.length) break;
-      i++; // skip nomor cue bila ada
-
+      i++;
       if (i >= lines.length) break;
       final timeLine = lines[i].trim();
       final m = RegExp(
@@ -150,19 +155,15 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
 
   void _updateSubtitle(Duration pos) {
     if (_cues.isEmpty) return;
-
-    // Cari cue aktif; optimasi mulai dari last index
     int startIdx = (_lastCueIdx >= 0 && _lastCueIdx < _cues.length) ? _lastCueIdx : 0;
     String? found;
     int idxFound = -1;
 
-    // cek current dulu
     final c0 = _cues[startIdx];
     if (pos >= c0.start && pos <= c0.end) {
       found = c0.text;
       idxFound = startIdx;
     } else {
-      // cari searah
       for (int k = 0; k < _cues.length; k++) {
         final i = (startIdx + k) % _cues.length;
         final c = _cues[i];
@@ -191,79 +192,231 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     }
   }
 
-  // ---------- YOUTUBE ----------
-  void _startYtTicker() {
-    _ytTicker ??= Timer.periodic(_tick, (_) async {
-      try {
-        if (_yt == null) return;
-        final seconds = await _yt!.currentTime; // Future<double>?
+  void _onYoutubeEvent(YoutubePlayerValue v) {
+    if (v.playerState == PlayerState.playing) {
+      _ytTicker ??= Timer.periodic(_tick, (_) async {
+        final seconds = await _yt!.currentTime;
         if (seconds != null) {
           final pos = Duration(milliseconds: (seconds * 1000).round());
           _updateSubtitle(pos);
-
-          // jaga sinkron interpreter (opsional)
-          if (_signLang != null && _signLang!.value.isInitialized) {
-            final diff = (pos - _signLang!.value.position).inMilliseconds.abs();
-            if (diff > 500) _signLang!.seekTo(pos);
-          }
         }
-      } catch (_) {}
-    });
-  }
-
-  void _stopYtTicker() {
-    _ytTicker?.cancel();
-    _ytTicker = null;
-  }
-
-  Future<void> _onYoutubeEvent(YoutubePlayerValue v) async {
-    // start/stop ticker berdasar state
-    if (v.playerState == PlayerState.playing) {
-      _startYtTicker();
-      _signLang?.play();
-    } else if (v.playerState == PlayerState.ended) {
-      _stopYtTicker();
-      _signLang?..pause()..seekTo(Duration.zero);
-      _updateSubtitle(const Duration(days: 0)); // paksa evaluasi ulang (kosong)
+      });
     } else {
-      // paused/buffering/cued/unknown
-      _stopYtTicker();
-      _signLang?.pause();
+      _ytTicker?.cancel();
+      _ytTicker = null;
     }
   }
 
-  // ---------- MP4 ----------
   void _onMp4MainEvent() {
     if (_mp4Main == null) return;
     final main = _mp4Main!.value;
-
-    // update subtitle kontinyu
     _updateSubtitle(main.position);
+  }
 
-    if (_signLang != null && _signLang!.value.isInitialized) {
-      if (main.isBuffering || !main.isPlaying) {
-        _signLang!.pause();
-        if (!main.isPlaying &&
-            main.position >= main.duration &&
-            main.duration != Duration.zero) {
-          _signLang!.seekTo(Duration.zero);
-        }
+  void _addComment(String text) {
+    if (text.trim().isEmpty) return;
+    setState(() {
+      if (_replyingTo != null) {
+        _replyingTo!.replies.add(
+          Comment(
+            name: "Kamu",
+            avatarUrl: "https://i.pravatar.cc/150?img=20",
+            text: text,
+          ),
+        );
+        _showReplies[_replyingTo!] = true;
+        _replyingTo = null;
       } else {
-        _signLang!.play();
-        final diff = (main.position - _signLang!.value.position).inMilliseconds.abs();
-        if (diff > 500) _signLang!.seekTo(main.position);
+        _comments.add(Comment(
+          name: "Kamu",
+          avatarUrl: "https://i.pravatar.cc/150?img=20",
+          text: text,
+        ));
       }
-    }
+      _commentController.clear();
+    });
+  }
+
+  Widget _buildComment(Comment comment) {
+    final isExpanded = _showReplies[comment] ?? false;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(thickness: 1, color: Color(0xFF293241)),
+        Row(children: [
+          CircleAvatar(backgroundImage: NetworkImage(comment.avatarUrl), radius: 18),
+          const SizedBox(width: 8),
+          Text(comment.name,
+              style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF293241))),
+        ]),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.only(left: 42.0),
+          child: Text(comment.text, style: const TextStyle(color: Color(0xFF293241))),
+        ),
+        Row(
+          children: [
+            TextButton(
+              onPressed: () => setState(() => _replyingTo = comment),
+              child: const Text("Balas", style: TextStyle(color: Color(0xFF293241))),
+            ),
+            if (comment.replies.isNotEmpty)
+              TextButton(
+                onPressed: () => setState(() => _showReplies[comment] = !isExpanded),
+                child: Text(
+                  isExpanded ? "Sembunyikan Balasan" : "Lihat ${comment.replies.length} Balasan",
+                  style: const TextStyle(color: Color(0xFF293241)),
+                ),
+              ),
+          ],
+        ),
+        if (isExpanded)
+          Container(
+            margin: const EdgeInsets.only(left: 42, bottom: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE0FBFC),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: comment.replies.map((r) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(backgroundImage: NetworkImage(r.avatarUrl), radius: 14),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(r.name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF293241))),
+                            Text(r.text, style: const TextStyle(color: Color(0xFF293241))),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        const Divider(thickness: 1, color: Color(0xFF293241)),
+      ],
+    );
   }
 
   @override
-  void dispose() {
-    _stopYtTicker();
-    _yt?.close();
-    _mp4Main?.removeListener(_onMp4MainEvent);
-    _mp4Main?.dispose();
-    _signLang?.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.title), backgroundColor: const Color(0xFF3D5A80)),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              AspectRatio(aspectRatio: 16 / 9, child: _buildPlayerArea()),
+              TextButton(
+                onPressed: () => setState(() => _showSubtitle = !_showSubtitle),
+                child: Text(_showSubtitle ? 'Hide Subtitle' : 'Show Subtitle'),
+              ),
+              Expanded(
+                child: Container(
+                  color: const Color(0xFFFAF9F6),
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
+                    children: [
+                      const Text(
+                        "Komentar",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF293241),
+                        ),
+                      ),
+                      for (var comment in _comments) _buildComment(comment),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          if (_replyingTo != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 120,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF98C1D9),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, -2))
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "Membalas: ${_replyingTo!.name}",
+                        style: const TextStyle(color: Color(0xFF293241)),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Color(0xFF293241)),
+                      onPressed: () => setState(() => _replyingTo = null),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              color: const Color(0xFF3D5A80),
+              padding: const EdgeInsets.fromLTRB(8, 10, 8, 20),
+              child: SafeArea(
+                top: false,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _commentController,
+                        decoration: InputDecoration(
+                          hintText: "Tulis komentar...",
+                          hintStyle: const TextStyle(color: Color(0xFF293241)),
+                          filled: true,
+                          fillColor: const Color(0xFFE0FBFC),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF293241)),
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.send, color: Color(0xFFE0FBFC)),
+                      onPressed: () => _addComment(_commentController.text),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildPlayerArea() {
@@ -277,82 +430,49 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                 aspectRatio: _mp4Main!.value.aspectRatio,
                 child: VideoPlayer(_mp4Main!),
               );
-
-    return Stack(
-      children: [
-        Positioned.fill(child: mainPlayer),
-
-        // Interpreter overlay (kanan-bawah)
-        if (_signLang != null && _signLang!.value.isInitialized)
-          Positioned(
-            right: 12,
-            bottom: 12,
-            width: 140,
-            height: 180,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: AspectRatio(
-                aspectRatio: _signLang!.value.aspectRatio,
-                child: VideoPlayer(_signLang!),
+    return Stack(children: [
+      Positioned.fill(child: mainPlayer),
+      if (_showSubtitle && (_currentSubtitle?.isNotEmpty ?? false))
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 8,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.55),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _currentSubtitle!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
             ),
           ),
-
-        // Subtitle overlay (tengah-bawah)
-        if (_showSubtitle && (_currentSubtitle?.isNotEmpty ?? false))
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: 8,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.55),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _currentSubtitle!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    height: 1.35,
-                    shadows: [Shadow(blurRadius: 2, color: Colors.black)],
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.title), backgroundColor: Colors.blue[900]),
-      body: Column(
-        children: [
-          AspectRatio(aspectRatio: 16 / 9, child: _buildPlayerArea()),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () => setState(() => _showSubtitle = !_showSubtitle),
-            child: Text(
-              _showSubtitle ? 'Hide Subtitle' : 'Show Subtitle',
-              style: const TextStyle(color: Colors.blue),
-            ),
-          ),
-        ],
-      ),
-    );
+        ),
+    ]);
   }
 }
 
-// ===== Model sederhana untuk cue SRT =====
 class _SrtCue {
   final Duration start;
   final Duration end;
   final String text;
   _SrtCue({required this.start, required this.end, required this.text});
+}
+
+class Comment {
+  final String name;
+  final String avatarUrl;
+  final String text;
+  final List<Comment> replies;
+
+  Comment({
+    required this.name,
+    required this.avatarUrl,
+    required this.text,
+    List<Comment>? replies,
+  }) : replies = replies ?? [];
 }

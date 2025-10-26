@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'form_quiz_page.dart'; // Halaman 2
+import 'form_quiz_page.dart';
 
 class SetupQuizPage extends StatefulWidget {
   const SetupQuizPage({super.key});
@@ -10,25 +10,22 @@ class SetupQuizPage extends StatefulWidget {
 }
 
 class _SetupQuizPageState extends State<SetupQuizPage> {
-  // Bikin 2 controller
   final _videoController = TextEditingController();
   final _jumlahController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   void _submit() {
     if (_formKey.currentState!.validate()) {
-      // Ambil kedua nilai
       final String videoID = _videoController.text;
       final int? jumlah = int.tryParse(_jumlahController.text);
 
       if (jumlah != null && jumlah > 0) {
-        // Kirim kedua data ke halaman FormQuizPage
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => FormQuizPage(
               jumlahPertanyaan: jumlah,
-              videoID: videoID, // <- Data videoID dikirim
+              videoID: videoID,
             ),
           ),
         );
@@ -46,66 +43,119 @@ class _SetupQuizPageState extends State<SetupQuizPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFFAF9F6),
       appBar: AppBar(
-        title: Text('Setup Quiz Baru'),
+        backgroundColor: const Color(0xFF3D5A80),
+        elevation: 0,
+        title: const Text(
+          'Setup Quiz Baru',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Masukkan Detail Quiz',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              SizedBox(height: 20),
-              
-              // --- FORM UNTUK VIDEO ID ---
-              TextFormField(
-                controller: _videoController,
-                decoration: InputDecoration(
-                  labelText: 'Video ID (yang akan dites)',
-                  border: OutlineInputBorder(),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                const Text(
+                  'Masukkan Detail Quiz',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF293241),
+                  ),
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Video ID wajib diisi';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 20),
+                const SizedBox(height: 30),
 
-              // --- FORM UNTUK JUMLAH SOAL ---
-              TextFormField(
-                controller: _jumlahController,
-                decoration: InputDecoration(
-                  labelText: 'Jumlah Pertanyaan',
-                  border: OutlineInputBorder(),
+                // Input Video ID
+                TextFormField(
+                  controller: _videoController,
+                  decoration: InputDecoration(
+                    labelText: 'Video ID (yang akan dites)',
+                    labelStyle: const TextStyle(color: Color(0xFF293241)),
+                    filled: true,
+                    fillColor: const Color(0xFFE0FBFC),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFF3D5A80), width: 2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFF98C1D9)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Video ID wajib diisi';
+                    }
+                    return null;
+                  },
                 ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Harap isi jumlah';
-                  }
-                  if (int.tryParse(value) == null || int.parse(value) <= 0) {
-                    return 'Masukkan angka positif';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 30),
-              ElevatedButton(
-                onPressed: _submit,
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                const SizedBox(height: 20),
+
+                // Input Jumlah Pertanyaan
+                TextFormField(
+                  controller: _jumlahController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: 'Jumlah Pertanyaan',
+                    labelStyle: const TextStyle(color: Color(0xFF293241)),
+                    filled: true,
+                    fillColor: const Color(0xFFE0FBFC),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFF3D5A80), width: 2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFF98C1D9)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Harap isi jumlah';
+                    }
+                    if (int.tryParse(value) == null || int.parse(value) <= 0) {
+                      return 'Masukkan angka positif';
+                    }
+                    return null;
+                  },
                 ),
-                child: Text('Buat Form'),
-              ),
-            ],
+                const SizedBox(height: 40),
+
+                // Tombol Submit
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3D5A80),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      elevation: 3,
+                    ),
+                    child: const Text(
+                      'Buat Form',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

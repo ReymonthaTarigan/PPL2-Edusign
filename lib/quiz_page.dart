@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum QuizState { entry, loading, answering, results }
+enum QuizState { entry, loading, answering, results, noQuiz } // + noQuiz
 
 class QuizPage extends StatefulWidget {
-  const QuizPage({super.key});
+  /// Jika diisi, halaman akan otomatis mengisi textfield & langsung memulai kuis
+  final String? initialVideoId;
+
+  const QuizPage({super.key, this.initialVideoId});
 
   @override
   State<QuizPage> createState() => _QuizPageState();
@@ -18,6 +21,16 @@ class _QuizPageState extends State<QuizPage> {
   int _currentQuestionIndex = 0;
   int _score = 0;
   String _currentVideoId = "";
+
+  @override
+  void initState() {
+    super.initState();
+    final iv = (widget.initialVideoId ?? '').trim();
+    if (iv.isNotEmpty) {
+      _videoController.text = iv;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startQuiz());
+    }
+  }
 
   Future<void> _startQuiz() async {
     final videoId = _videoController.text.trim();
@@ -43,13 +56,10 @@ class _QuizPageState extends State<QuizPage> {
           .get();
 
       if (snapshot.docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Soal untuk Video ID ini tidak ditemukan.'),
-            backgroundColor: Color(0xFFEE6C4D),
-          ),
-        );
-        _resetQuiz();
+        // TAMPILKAN HALAMAN “belum tersedia”
+        setState(() {
+          _currentState = QuizState.noQuiz;
+        });
       } else {
         snapshot.docs.shuffle();
         setState(() {
@@ -70,16 +80,10 @@ class _QuizPageState extends State<QuizPage> {
 
   void _answerQuestion(String selectedOption) {
     final correctAnswer = _questions[_currentQuestionIndex].get('kunciJawaban');
-    if (selectedOption == correctAnswer) {
-      _score++;
-    }
-    setState(() {
-      _currentQuestionIndex++;
-    });
+    if (selectedOption == correctAnswer) _score++;
+    setState(() => _currentQuestionIndex++);
     if (_currentQuestionIndex >= _questions.length) {
-      setState(() {
-        _currentState = QuizState.results;
-      });
+      setState(() => _currentState = QuizState.results);
     }
   }
 
@@ -115,11 +119,15 @@ class _QuizPageState extends State<QuizPage> {
       case QuizState.entry:
         return _buildEntryView();
       case QuizState.loading:
-        return const Center(child: CircularProgressIndicator(color: Color(0xFF3D5A80)));
+        return const Center(
+          child: CircularProgressIndicator(color: Color(0xFF3D5A80)),
+        );
       case QuizState.answering:
         return _buildQuestionView();
       case QuizState.results:
         return _buildResultsView();
+      case QuizState.noQuiz:
+        return _buildNoQuizView(); // << baru
     }
   }
 
@@ -132,9 +140,7 @@ class _QuizPageState extends State<QuizPage> {
           const Text(
             'Masukkan Video ID untuk memulai kuis',
             style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF293241),
+              fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF293241),
             ),
             textAlign: TextAlign.center,
           ),
@@ -163,17 +169,11 @@ class _QuizPageState extends State<QuizPage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF3D5A80),
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 40),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             child: const Text(
               'Mulai Kuis',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
             ),
           )
         ],
@@ -198,9 +198,7 @@ class _QuizPageState extends State<QuizPage> {
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 400,
-              ),
+              constraints: const BoxConstraints(maxWidth: 400),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -209,12 +207,10 @@ class _QuizPageState extends State<QuizPage> {
                     'Soal ${_currentQuestionIndex + 1} dari ${_questions.length}',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      color: Color(0xFF293241),
-                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF293241), fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
                     decoration: BoxDecoration(
@@ -223,9 +219,7 @@ class _QuizPageState extends State<QuizPage> {
                       boxShadow: const [
                         BoxShadow(
                           color: Color.fromARGB(255, 49, 49, 49),
-                          offset: Offset(-2, 2),
-                          blurRadius: 4,
-                          spreadRadius: 1,
+                          offset: Offset(-2, 2), blurRadius: 4, spreadRadius: 1,
                         ),
                       ],
                     ),
@@ -233,13 +227,10 @@ class _QuizPageState extends State<QuizPage> {
                       questionData['pertanyaan'],
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        color: Color(0xFF293241),
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF293241), fontSize: 20, fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 24),
                   ...options.map((option) {
                     return Padding(
@@ -249,17 +240,13 @@ class _QuizPageState extends State<QuizPage> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF3D5A80),
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 3,
                         ),
                         child: Text(
                           option as String,
                           style: const TextStyle(
-                            fontSize: 16,
-                            color: Color(0xFFE0FBFC),
-                            fontWeight: FontWeight.w600,
+                            fontSize: 16, color: Color(0xFFE0FBFC), fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -291,40 +278,79 @@ class _QuizPageState extends State<QuizPage> {
               const Text(
                 'Quiz Selesai!',
                 style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF293241),
+                  fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF293241),
                 ),
               ),
               const SizedBox(height: 20),
-              const Text(
-                'Nilai Kamu:',
-                style: TextStyle(fontSize: 18, color: Color(0xFF293241)),
-              ),
+              const Text('Nilai Kamu:', style: TextStyle(fontSize: 18, color: Color(0xFF293241))),
               Text(
                 '$_score / ${_questions.length}',
                 style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF3D5A80),
+                  fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF3D5A80),
                 ),
               ),
               const SizedBox(height: 24),
+              // GANTI: tombol kembali ke materi (pop ke halaman sebelumnya)
               ElevatedButton(
-                onPressed: _resetQuiz,
+                onPressed: () {
+                  Navigator.of(context).maybePop();
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF3D5A80),
                   padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 child: const Text(
-                  'Coba Video ID Lain',
+                  'Kembali ke Materi',
                   style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                    color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Tampilan bila tidak ada soal untuk video ini
+  Widget _buildNoQuizView() {
+    return Center(
+      child: Card(
+        color: const Color(0xFF98C1D9),
+        margin: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF293241), width: 2),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Quiz untuk materi ini belum tersedia',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF293241),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).maybePop();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3D5A80),
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text(
+                  'Kembali',
+                  style: TextStyle(
+                    color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600,
                   ),
                 ),
               ),

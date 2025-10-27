@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+// sesuaikan path jika berbeda
 import 'getService/getdetail.dart';
 
 class CategoryVideosPage extends StatelessWidget {
@@ -31,7 +33,8 @@ class CategoryVideosPage extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             itemCount: videos.length,
             itemBuilder: (context, index) {
-              final data = videos[index].data() as Map<String, dynamic>;
+              final doc = videos[index];
+              final data = doc.data() as Map<String, dynamic>;
               final title = data['title'] ?? 'Untitled';
               final link = data['link'] ?? '';
               final signLang = data['signLanguage'];
@@ -49,6 +52,7 @@ class CategoryVideosPage extends StatelessWidget {
                   title: Text(title),
                   subtitle: const Text("Tap to watch"),
                   onTap: () {
+                    final docId = doc.id; // <<< ambil ID dokumen dari koleksi `videos`
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -57,6 +61,7 @@ class CategoryVideosPage extends StatelessWidget {
                           videoUrl: link,
                           signLangUrl: signLang,
                           subtitle: subtitle,
+                          videoDocId: docId, // <<< kirim ke halaman detail
                         ),
                       ),
                     );

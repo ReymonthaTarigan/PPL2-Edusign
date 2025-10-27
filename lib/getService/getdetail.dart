@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
+import 'package:edu_sign/quiz_page.dart';
+
 
 class VideoDetailPage extends StatefulWidget {
   final String title;
@@ -11,12 +13,16 @@ class VideoDetailPage extends StatefulWidget {
   final String? signLangUrl;
   final String? subtitle;
 
+  /// Tambahan: id dokumen koleksi `videos` (doc.id) — ini yang akan dipakai sebagai videoID kuis
+  final String? videoDocId;
+
   const VideoDetailPage({
     super.key,
     required this.title,
     required this.videoUrl,
     this.signLangUrl,
     this.subtitle,
+    this.videoDocId,
   });
 
   @override
@@ -275,8 +281,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             margin: const EdgeInsets.only(left: 42, bottom: 8),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFFE0FBFC),
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFFE0FBFC), borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
               children: comment.replies.map((r) {
@@ -293,8 +298,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                           children: [
                             Text(r.name,
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF293241))),
+                                    fontWeight: FontWeight.bold, color: Color(0xFF293241))),
                             Text(r.text, style: const TextStyle(color: Color(0xFF293241))),
                           ],
                         ),
@@ -319,10 +323,49 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           Column(
             children: [
               AspectRatio(aspectRatio: 16 / 9, child: _buildPlayerArea()),
+
+              // Toggle subtitle
               TextButton(
                 onPressed: () => setState(() => _showSubtitle = !_showSubtitle),
                 child: Text(_showSubtitle ? 'Hide Subtitle' : 'Show Subtitle'),
               ),
+
+              // === TOMBOL QUIZ (pakai doc.id dari koleksi `videos`) ===
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.quiz),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3D5A80),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      final idForQuiz = widget.videoDocId;
+                      if (idForQuiz == null || idForQuiz.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('ID video tidak tersedia')),
+                        );
+                        return;
+                      }
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => QuizPage(initialVideoId: idForQuiz),
+                        ),
+                      );
+                    },
+                    label: const Text(
+                      'Mulai Kuis untuk Video Ini',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ),
+
+              // ===== Komentar =====
               Expanded(
                 child: Container(
                   color: const Color(0xFFFAF9F6),
@@ -332,9 +375,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                       const Text(
                         "Komentar",
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF293241),
+                          fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF293241),
                         ),
                       ),
                       for (var comment in _comments) _buildComment(comment),
@@ -356,9 +397,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF98C1D9),
                   borderRadius: BorderRadius.circular(8),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, -2))
-                  ],
+                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, -2))],
                 ),
                 child: Row(
                   children: [
@@ -377,6 +416,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
               ),
             ),
 
+          // Input komentar
           Positioned(
             left: 0,
             right: 0,

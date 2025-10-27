@@ -4,7 +4,7 @@ import 'getService/getdetail.dart';
 import 'auth.dart';
 import 'forum.dart';
 import 'setting.dart';
-import 'category_videos_page.dart'; // halaman baru untuk kategori
+import 'category_videos_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -18,7 +18,7 @@ class HomePage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 🔹 HEADER
+              // HEADER
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -53,7 +53,7 @@ class HomePage extends StatelessWidget {
                           );
                         }
                         final userData =
-                        snapshot.data!.data() as Map<String, dynamic>?;
+                            snapshot.data!.data() as Map<String, dynamic>?;
                         final name = userData?['name'] ?? '-';
                         return Text(
                           "Hi, $name",
@@ -86,7 +86,7 @@ class HomePage extends StatelessWidget {
 
               const SizedBox(height: 30),
 
-              // 🔹 CATEGORY SCROLL (Horizontal)
+              // CATEGORY
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
@@ -118,17 +118,15 @@ class HomePage extends StatelessWidget {
 
               const SizedBox(height: 40),
 
-              // 🔹 RECENTLY VIEWED
+              // RECENTLY VIEWED (list semua video versi sederhana)
               Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: const [
                     Text(
                       "Recently Viewed",
-                      style:
-                      TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
                     ),
                     Text(
                       "See All",
@@ -138,12 +136,13 @@ class HomePage extends StatelessWidget {
                 ),
               ),
 
-              // 🔹 VIDEO LIST
+              // VIDEO LIST
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: StreamBuilder<QuerySnapshot>(
-                  stream:
-                  FirebaseFirestore.instance.collection('videos').snapshots(),
+                  stream: FirebaseFirestore.instance
+                      .collection('videos')
+                      .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -157,7 +156,8 @@ class HomePage extends StatelessWidget {
 
                     final videos = snapshot.data!.docs;
                     return Column(
-                      children: videos.map((doc) {
+                      children: List.generate(videos.length, (i) {
+                        final doc = videos[i]; // <-- ambil DocumentSnapshot
                         final data = doc.data() as Map<String, dynamic>;
                         final title = data['title'] ?? 'Untitled';
                         final link = data['link'] ?? '';
@@ -184,13 +184,14 @@ class HomePage extends StatelessWidget {
                                     videoUrl: link,
                                     signLangUrl: signLang,
                                     subtitle: subtitle,
+                                    videoDocId: doc.id, // <-- KIRIM doc.id KE DETAIL
                                   ),
                                 ),
                               );
                             },
                           ),
                         );
-                      }).toList(),
+                      }),
                     );
                   },
                 ),
@@ -202,7 +203,7 @@ class HomePage extends StatelessWidget {
         ),
       ),
 
-      // 🔹 BOTTOM NAVIGATION
+      // BOTTOM NAV
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 0,
         selectedItemColor: Colors.blue[900],

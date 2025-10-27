@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'auth.dart';
 import 'login.dart';
+import 'package:http/http.dart' as http;
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -13,11 +14,11 @@ class AdminHomePage extends StatefulWidget {
 class _AdminHomePageState extends State<AdminHomePage> {
   final Auth auth = Auth();
 
-  // Controller Text Input
+  // Controller untuk input
   final TextEditingController linkController = TextEditingController();
   final TextEditingController titleController = TextEditingController();
 
-  // Dropdown value
+  // Dropdown
   String? selectedGrade;
   String? selectedSubject;
 
@@ -34,10 +35,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
     "Pendidikan Jasmani, Olahraga dan Kesehatan",
   ];
 
+  // 🔹 Dialog Upload
   void openUploadDialog() {
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text("Upload Video Baru"),
           content: SingleChildScrollView(
@@ -58,30 +60,38 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   items: grades
                       .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                       .toList(),
-                  onChanged: (value) => setState(() => selectedGrade = value),
+                  onChanged: (value) {
+                    setState(() => selectedGrade = value);
+                  },
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: selectedSubject,
-                  decoration: const InputDecoration(labelText: "Pilih Mata Pelajaran"),
+                  decoration:
+                      const InputDecoration(labelText: "Pilih Mata Pelajaran"),
                   items: subjects
                       .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                       .toList(),
-                  onChanged: (value) => setState(() => selectedSubject = value),
+                  onChanged: (value) {
+                    setState(() => selectedSubject = value);
+                  },
                 ),
               ],
             ),
           ),
           actions: [
             TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text("Batal"),
-              onPressed: () => Navigator.pop(context),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3D5A80)),
+                backgroundColor: const Color(0xFF3D5A80),
+              ),
+              onPressed: () {
+                uploadVideo(dialogContext); // kirim dialogContext
+              },
               child: const Text("Upload"),
-              onPressed: uploadVideo,
             ),
           ],
         );
@@ -89,39 +99,50 @@ class _AdminHomePageState extends State<AdminHomePage> {
     );
   }
 
-  Future<void> uploadVideo() async {
+  // 🔹 Fungsi Upload dan Panggil Endpoint Flask
+  Future<void> uploadVideo(BuildContext dialogContext) async {
+    print("📍 MULAI uploadVideo() dipanggil");
+
     if (titleController.text.isEmpty ||
         linkController.text.isEmpty ||
         selectedGrade == null ||
         selectedSubject == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("⚠ Harap lengkapi semua data!")),
-      );
+      print("⚠ Form belum lengkap");
       return;
     }
 
-    await FirebaseFirestore.instance.collection("videos").add({
-      "title": titleController.text,
-      "link": linkController.text,
-      "educationLevel": selectedGrade,
-      "subject": selectedSubject,
-      "Status": true,
-      "timestamp": DateTime.now(),
-    });
+    try {
+      print("📍 Tambah video ke Firestore...");
+      final docRef = await FirebaseFirestore.instance.collection("videos").add({
+        "title": titleController.text.trim(),
+        "link": linkController.text.trim(),
+        "educationLevel": selectedGrade,
+        "subject": selectedSubject,
+        "status": false,
+        "timestamp": FieldValue.serverTimestamp(),
+      });
 
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("✅ Video berhasil diupload!")),
-    );
+      final videoId = docRef.id;
+      print("✅ Firestore OK, ID: $videoId");
 
-    // bersihkan input
-    titleController.clear();
-    linkController.clear();
-    selectedGrade = null;
-    selectedSubject = null;
-    setState(() {});
+      const String ngrokBaseUrl =
+          "https://roni-uncharacterised-patchily.ngrok-free.dev";
+      final String apiUrl = "$ngrokBaseUrl/process/$videoId";
+      print("🌐 Akan memanggil Flask di: $apiUrl");
+
+      final response = await http
+          .get(Uri.parse(apiUrl))
+          .timeout(const Duration(seconds: 30));
+
+      print("📥 Respon diterima: ${response.statusCode}");
+      print("🧾 Isi respon: ${response.body}");
+    } catch (e) {
+      print("❌ ERROR: $e");
+    }
   }
 
+
+  // 🔹 UI Utama
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -134,13 +155,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await auth.signOut();
-              if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                      (route) => false,
-                );
-              }
+              if (!mounted) return;
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
             },
           )
         ],
@@ -152,7 +172,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           ),
           icon: const Icon(Icons.upload, size: 26),
-          label: const Text("Upload Video Baru", style: TextStyle(fontSize: 18)),
+          label:
+              const Text("Upload Video Baru", style: TextStyle(fontSize: 18)),
           onPressed: openUploadDialog,
         ),
       ),

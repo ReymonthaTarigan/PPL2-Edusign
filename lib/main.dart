@@ -4,6 +4,7 @@ import 'frontpage.dart';
 import 'firebase_options.dart';
 import 'setup_quiz_page.dart'; // Tambahkan ini di atas
 import 'quiz_page.dart';
+import 'ai_quiz_generator_page.dart'; // Tambahkan ini
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +25,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const SetupQuizPage(), //SetupQuizPage(masukin soal) & QuizPage(nyoba jawab)
+      home: const FrontPage(), //SetupQuizPage(masukin soal) AiQuizGenerator& QuizPage(nyoba jawab)
     );
   }
 }

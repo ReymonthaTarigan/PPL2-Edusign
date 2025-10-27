@@ -15,7 +15,7 @@ class _QuizPageState extends State<QuizPage> {
   // --- State Management ---
   QuizState _currentState = QuizState.entry;
   final _videoController = TextEditingController();
-  
+
   List<DocumentSnapshot> _questions = [];
   int _currentQuestionIndex = 0;
   int _score = 0;
@@ -103,9 +103,8 @@ class _QuizPageState extends State<QuizPage> {
     });
   }
 
-
   // --- Fungsi Build UI ---
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -165,8 +164,16 @@ class _QuizPageState extends State<QuizPage> {
       return Center(child: Text('Soal tidak valid.'));
     }
 
-    final questionData = _questions[_currentQuestionIndex].data() as Map<String, dynamic>;
-    final List<dynamic> options = questionData['options'];
+    final questionData =
+        _questions[_currentQuestionIndex].data() as Map<String, dynamic>;
+        
+    // --- PERBAIKAN DI SINI ---
+    // 1. Buat SALINAN list agar bisa diacak tanpa merusak data asli
+    final List<dynamic> options = List.from(questionData['options']);
+    
+    // 2. Acak salinan list tersebut
+    options.shuffle();
+    // --- AKHIR PERBAIKAN ---
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -189,7 +196,7 @@ class _QuizPageState extends State<QuizPage> {
           ),
           SizedBox(height: 30),
 
-          // Pilihan Jawaban
+          // Pilihan Jawaban (Sekarang sudah dari list yang teracak)
           ...options.map((option) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0),

@@ -166,18 +166,18 @@ class QuizListPage extends StatelessWidget {
                           onPressed: () async {
                             final ok = await showDialog<bool>(
                               context: context,
-                              builder: (_) => AlertDialog(
+                              builder: (dialogContext) => AlertDialog(
                                 title: const Text('Hapus Soal?'),
                                 content: const Text(
                                     'Tindakan ini tidak bisa dibatalkan.'),
                                 actions: [
                                   TextButton(
                                       onPressed: () =>
-                                          Navigator.pop(context, false),
+                                          Navigator.of(dialogContext).pop(false),
                                       child: const Text('Batal')),
                                   ElevatedButton(
                                       onPressed: () =>
-                                          Navigator.pop(context, true),
+                                          Navigator.of(dialogContext).pop(true),
                                       child: const Text('Hapus')),
                                 ],
                               ),
@@ -257,6 +257,7 @@ class QuizListPage extends StatelessWidget {
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3D5A80),
+                foregroundColor: Colors.white, // ← ini bikin teksnya putih
               ),
               child: const Text("Simpan Perubahan"),
               onPressed: () async {

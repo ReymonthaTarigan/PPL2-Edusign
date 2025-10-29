@@ -258,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       // Lupa password
                       Align(
-                        alignment: Alignment.centerRight,
+                        alignment: Alignment.center,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           child: TextButton(

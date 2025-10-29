@@ -35,9 +35,16 @@ class VideoDetailPage extends StatefulWidget {
 class _VideoDetailPageState extends State<VideoDetailPage> {
   YoutubePlayerController? _yt;
   VideoPlayerController? _mp4Main;
+
+  // Bahasa Isyarat (overlay)
+  VideoPlayerController? _signLang;
+
   Timer? _ytTicker;
   static const _tick = Duration(milliseconds: 250);
   bool _showSubtitle = true;
+
+  // ===== Tambahan: toggle tampil Bahasa Isyarat =====
+  bool _showSignLang = true;
 
   List<_SrtCue> _cues = [];
   int _lastCueIdx = -1;
@@ -83,6 +90,14 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     super.initState();
     _loadSrtFromUrl(widget.subtitle);
 
+    // Inisialisasi Bahasa Isyarat bila ada URL
+    if ((widget.signLangUrl ?? '').isNotEmpty) {
+      _signLang = VideoPlayerController.networkUrl(Uri.parse(widget.signLangUrl!))
+        ..initialize().then((_) {
+          setState(() {});
+        });
+    }
+
     if (_isYouTube) {
       final id = _extractId(widget.videoUrl);
       if (id != null && id.isNotEmpty) {
@@ -108,8 +123,10 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   @override
   void dispose() {
     _ytTicker?.cancel();
+    _mp4Main?.removeListener(_onMp4MainEvent);
     _mp4Main?.dispose();
     _yt?.close();
+    _signLang?.dispose();
     _commentController.dispose();
     super.dispose();
   }
@@ -212,119 +229,111 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     }
   }
 
+  // ================= YouTube & MP4 Events + Sinkron Interpreter =================
+
   void _onYoutubeEvent(YoutubePlayerValue v) {
     if (v.playerState == PlayerState.playing) {
+      // Mulai ticker untuk polling currentTime YouTube
       _ytTicker ??= Timer.periodic(_tick, (_) async {
-        final seconds = await _yt!.currentTime;
-        final pos = Duration(milliseconds: (seconds * 1000).round());
-        _updateSubtitle(pos);
+        if (_yt == null) return;
+        try {
+          final seconds = await _yt!.currentTime;
+          final pos = Duration(milliseconds: (seconds * 1000).round());
+          _updateSubtitle(pos);
+
+          // Sinkron Bahasa Isyarat hanya jika ditampilkan
+          if (_showSignLang && _signLang != null && _signLang!.value.isInitialized) {
+            final diffMs =
+                (pos - _signLang!.value.position).inMilliseconds.abs();
+            if (diffMs > 500) {
+              await _signLang!.seekTo(pos);
+            }
+            if (!_signLang!.value.isPlaying) {
+              await _signLang!.play();
+            }
+          }
+        } catch (_) {}
       });
+
+      if (_showSignLang) _signLang?.play();
     } else {
       _ytTicker?.cancel();
       _ytTicker = null;
+
+      if (v.playerState == PlayerState.ended) {
+        _signLang?..pause()..seekTo(Duration.zero);
+        _updateSubtitle(const Duration(seconds: 0));
+      } else {
+        _signLang?.pause();
+      }
     }
   }
 
   void _onMp4MainEvent() {
     if (_mp4Main == null) return;
     final main = _mp4Main!.value;
+
     _updateSubtitle(main.position);
+
+    if (_showSignLang && _signLang != null && _signLang!.value.isInitialized) {
+      if (main.isBuffering || !main.isPlaying) {
+        _signLang!.pause();
+        if (!main.isPlaying &&
+            main.position >= main.duration &&
+            main.duration != Duration.zero) {
+          _signLang!.seekTo(Duration.zero);
+        }
+      } else {
+        if (!_signLang!.value.isPlaying) _signLang!.play();
+        final diff =
+            (main.position - _signLang!.value.position).inMilliseconds.abs();
+        if (diff > 500) {
+          _signLang!.seekTo(main.position);
+        }
+      }
+    } else {
+      // jika sedang tidak ditampilkan, pastikan berhenti
+      _signLang?.pause();
+    }
   }
 
-  // ================= Komentar (Firestore) =================
+  // ================= Helper toggle Bahasa Isyarat =================
 
-  /// Stream komentar — where(videoId) + orderBy(localCreatedAt desc)
-  Stream<QuerySnapshot<Map<String, dynamic>>>? get _commentStream {
-    final vid = _videoIdForComments;
-    if (vid == null || vid.isEmpty) return null;
-    final col = FirebaseFirestore.instance.collection('comments');
-    return col
-        .where('videoId', isEqualTo: vid)
-        .orderBy('localCreatedAt', descending: true)
-        .snapshots();
-  }
+  Future<void> _toggleSignLang() async {
+    final newValue = !_showSignLang;
+    setState(() => _showSignLang = newValue);
 
-  /// Kirim komentar baru (userId = uid login)
-  Future<void> _sendCommentToFirestore(String text) async {
-    final vid = _videoIdForComments;
-    if (vid == null || vid.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Video ID tidak ditemukan untuk komentar.')),
-      );
+    if (!_showSignLang) {
+      // Sembunyikan → pause agar hemat resource
+      _signLang?.pause();
       return;
     }
-    final content = text.trim();
-    if (content.isEmpty) return;
 
-    final String uid = _auth.currentUser?.uid ?? 'guru';
+    // Ditampilkan lagi → sinkronkan posisi lalu play bila main player play
+    if (_signLang != null && _signLang!.value.isInitialized) {
+      Duration target = Duration.zero;
 
-    try {
-      await FirebaseFirestore.instance.collection('comments').add({
-        'content': content,
-        'videoId': vid,
-        'userId': uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'localCreatedAt': DateTime.now(),
-      });
-      _commentController.clear();
-      setState(() => _replyingTo = null);
-      FocusScope.of(context).unfocus();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengirim komentar: $e')),
-      );
-    }
-  }
-
-  // ====== Prefetch nama user mirip forum_service.getUserName, tapi batch ======
-  Future<Map<String, String>> _getNamesForUids(List<String> uids) async {
-    // Gunakan cache lebih dulu
-    final result = <String, String>{};
-    final missing = <String>[];
-    for (final uid in uids) {
-      if (_nameCache.containsKey(uid)) {
-        result[uid] = _nameCache[uid]!;
-      } else {
-        missing.add(uid);
+      if (_isYouTube && _yt != null) {
+        try {
+          final seconds = await _yt!.currentTime;
+          target = Duration(milliseconds: (seconds * 1000).round());
+        } catch (_) {}
+      } else if (_mp4Main != null) {
+        target = _mp4Main!.value.position;
       }
-    }
-    if (missing.isEmpty) return result;
 
-    // Firestore whereIn maksimal 10 item per query → chunk
-    for (var i = 0; i < missing.length; i += 10) {
-      final chunk = missing.sublist(i, (i + 10).clamp(0, missing.length));
       try {
-        final snap = await FirebaseFirestore.instance
-            .collection('users')
-            .where(FieldPath.documentId, whereIn: chunk)
-            .get();
+        await _signLang!.seekTo(target);
+      } catch (_) {}
 
-        for (final doc in snap.docs) {
-          final data = doc.data();
-          final name = (data['name'] as String?) ??
-              (data['displayName'] as String?) ??
-              doc.id; // fallback uid
-          _nameCache[doc.id] = name;
-          result[doc.id] = name;
-        }
+      final bool mainIsPlaying = _isYouTube
+          ? (_yt?.value.playerState == PlayerState.playing)
+          : (_mp4Main?.value.isPlaying ?? false);
 
-        // Jika ada uid yang tidak ada dokumennya, isi "Guru" biar nggak query ulang
-        final foundIds = snap.docs.map((d) => d.id).toSet();
-        for (final uid in chunk) {
-          if (!foundIds.contains(uid)) {
-            _nameCache[uid] = 'Guru';
-            result[uid] = 'Guru';
-          }
-        }
-      } catch (e) {
-        // Jika error (misal rules), jangan crash – isi fallback
-        for (final uid in chunk) {
-          _nameCache[uid] = 'Guru';
-          result[uid] = 'Guru';
-        }
+      if (mainIsPlaying) {
+        _signLang!.play();
       }
     }
-    return result;
   }
 
   // ================= UI =================
@@ -340,8 +349,26 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                 aspectRatio: _mp4Main!.value.aspectRatio,
                 child: VideoPlayer(_mp4Main!),
               );
+
     return Stack(children: [
       Positioned.fill(child: mainPlayer),
+
+      // Overlay Bahasa Isyarat (tampil jika toggle ON)
+      if (_showSignLang && _signLang != null && _signLang!.value.isInitialized)
+        Positioned(
+          right: 12,
+          bottom: 12,
+          width: 140,
+          height: 180,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: AspectRatio(
+              aspectRatio: _signLang!.value.aspectRatio,
+              child: VideoPlayer(_signLang!),
+            ),
+          ),
+        ),
+
       if (_showSubtitle && (_currentSubtitle?.isNotEmpty ?? false))
         Positioned(
           left: 12,
@@ -375,9 +402,23 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             children: [
               AspectRatio(aspectRatio: 16 / 9, child: _buildPlayerArea()),
 
-              TextButton(
-                onPressed: () => setState(() => _showSubtitle = !_showSubtitle),
-                child: Text(_showSubtitle ? 'Hide Subtitle' : 'Show Subtitle'),
+              // Tombol toggle Subtitle & Bahasa Isyarat
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0, bottom: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () => setState(() => _showSubtitle = !_showSubtitle),
+                      child: Text(_showSubtitle ? 'Hide Subtitle' : 'Show Subtitle'),
+                    ),
+                    const SizedBox(width: 12),
+                    TextButton(
+                      onPressed: _toggleSignLang,
+                      child: Text(_showSignLang ? 'Hide Bahasa Isyarat' : 'Show Bahasa Isyarat'),
+                    ),
+                  ],
+                ),
               ),
 
               Padding(
@@ -590,6 +631,102 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         ],
       ),
     );
+  }
+
+  // ================= Komentar (Firestore) =================
+
+  /// Stream komentar — where(videoId) + orderBy(localCreatedAt desc)
+  Stream<QuerySnapshot<Map<String, dynamic>>>? get _commentStream {
+    final vid = _videoIdForComments;
+    if (vid == null || vid.isEmpty) return null;
+    final col = FirebaseFirestore.instance.collection('comments');
+    return col
+        .where('videoId', isEqualTo: vid)
+        .orderBy('localCreatedAt', descending: true)
+        .snapshots();
+  }
+
+  /// Kirim komentar baru (userId = uid login)
+  Future<void> _sendCommentToFirestore(String text) async {
+    final vid = _videoIdForComments;
+    if (vid == null || vid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Video ID tidak ditemukan untuk komentar.')),
+      );
+      return;
+    }
+    final content = text.trim();
+    if (content.isEmpty) return;
+
+    final String uid = _auth.currentUser?.uid ?? 'guru';
+
+    try {
+      await FirebaseFirestore.instance.collection('comments').add({
+        'content': content,
+        'videoId': vid,
+        'userId': uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'localCreatedAt': DateTime.now(),
+      });
+      _commentController.clear();
+      setState(() => _replyingTo = null);
+      FocusScope.of(context).unfocus();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengirim komentar: $e')),
+      );
+    }
+  }
+
+  // ====== Prefetch nama user mirip forum_service.getUserName, tapi batch ======
+  Future<Map<String, String>> _getNamesForUids(List<String> uids) async {
+    // Gunakan cache lebih dulu
+    final result = <String, String>{};
+    final missing = <String>[];
+    for (final uid in uids) {
+      if (_nameCache.containsKey(uid)) {
+        result[uid] = _nameCache[uid]!;
+      } else {
+        missing.add(uid);
+      }
+    }
+    if (missing.isEmpty) return result;
+
+    // Firestore whereIn maksimal 10 item per query → chunk
+    for (var i = 0; i < missing.length; i += 10) {
+      final chunk = missing.sublist(i, (i + 10).clamp(0, missing.length));
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+
+        for (final doc in snap.docs) {
+          final data = doc.data();
+          final name = (data['name'] as String?) ??
+              (data['displayName'] as String?) ??
+              doc.id; // fallback uid
+          _nameCache[doc.id] = name;
+          result[doc.id] = name;
+        }
+
+        // Jika ada uid yang tidak ada dokumennya, isi "Guru" biar nggak query ulang
+        final foundIds = snap.docs.map((d) => d.id).toSet();
+        for (final uid in chunk) {
+          if (!foundIds.contains(uid)) {
+            _nameCache[uid] = 'Guru';
+            result[uid] = 'Guru';
+          }
+        }
+      } catch (e) {
+        // Jika error (misal rules), jangan crash – isi fallback
+        for (final uid in chunk) {
+          _nameCache[uid] = 'Guru';
+          result[uid] = 'Guru';
+        }
+      }
+    }
+    return result;
   }
 
   Widget _buildCommentCard({

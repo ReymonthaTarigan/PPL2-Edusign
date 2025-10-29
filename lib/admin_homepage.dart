@@ -199,18 +199,22 @@ class _AdminHomePageState extends State<AdminHomePage> {
   Future<void> _confirmAndDeleteVideo(String videoDocId, String title) async {
     final confirm = await showDialog<bool>(
       context: context,
+      useRootNavigator: true,          // <-- penting
+      barrierDismissible: false,       // <-- opsional: biar ga ketutup karena tap di luar
       builder: (ctx) => AlertDialog(
         title: const Text("Hapus Video"),
         content: Text('Yakin ingin menghapus video:\n"$title"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
+            onPressed: () =>
+                Navigator.of(ctx, rootNavigator: true).pop(false), // <-- tutup dialog
             child: const Text("Batal"),
           ),
           ElevatedButton.icon(
             icon: const Icon(Icons.delete_outline),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () =>
+                Navigator.of(ctx, rootNavigator: true).pop(true),  // <-- tutup dialog
             label: const Text("Hapus"),
           ),
         ],
@@ -233,6 +237,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       );
     }
   }
+
 
   // ====== UI ======
   @override
@@ -392,6 +397,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: openUploadDialog,
         backgroundColor: const Color(0xFF3D5A80),
+        foregroundColor: Colors.white,
         icon: const Icon(Icons.upload),
         label: const Text("Upload Video Baru"),
       ),
@@ -446,9 +452,9 @@ class _VideoCard extends StatelessWidget {
                     title,
                     style: const TextStyle(
                       fontSize: 16,
-                      color: Color(0xFF1E88E5),
+                      color: Color.fromARGB(255, 0, 0, 0),
                       fontWeight: FontWeight.w700,
-                      decoration: TextDecoration.underline,
+                  
                     ),
                   ),
                 ),

@@ -54,8 +54,8 @@ class ForumService {
   Future<String> getUserName(String userId) async {
     final doc = await _firestore.collection('users').doc(userId).get();
     if (doc.exists) {
-      return (doc.data()?['name'] as String?) ?? 'Anonim';
+      return (doc.data()?['name'] as String?) ?? 'Guru';
     }
-    return 'Anonim';
+    return 'Guru';
   }
 }

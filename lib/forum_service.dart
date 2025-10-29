@@ -1,4 +1,3 @@
-// lib/services/forum_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ForumService {
@@ -19,6 +18,7 @@ class ForumService {
   }
 
   // 💬 Tambah komentar pada postingan
+  // Gunakan localCreatedAt agar stream/orderBy stabil sebelum serverTimestamp terisi
   Future<void> addComment({
     required String postId,
     required String userId,
@@ -28,11 +28,12 @@ class ForumService {
       'postId': postId,
       'userId': userId,
       'content': content,
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(), // server time (mungkin null sesaat)
+      'localCreatedAt': DateTime.now(),          // client time (langsung terisi)
     });
   }
 
-  // 🔍 Ambil semua postingan forum (urut dari terbaru)
+  // 🔍 Ambil semua postingan forum (urut terbaru)
   Stream<QuerySnapshot> getAllPosts() {
     return _firestore
         .collection('forumPost')
@@ -40,20 +41,20 @@ class ForumService {
         .snapshots();
   }
 
-  // 🔍 Ambil semua komentar berdasarkan postId
+  // 🔍 Ambil komentar berdasarkan postId, urut lama→baru dengan localCreatedAt
   Stream<QuerySnapshot> getComments(String postId) {
     return _firestore
         .collection('forumComments')
         .where('postId', isEqualTo: postId)
-        .orderBy('createdAt', descending: false)
+        .orderBy('localCreatedAt', descending: false)
         .snapshots();
   }
 
-  // 🔍 Ambil nama user berdasarkan userId (dari collection users)
+  // 🔍 Ambil nama user dari collection users (opsional)
   Future<String> getUserName(String userId) async {
     final doc = await _firestore.collection('users').doc(userId).get();
     if (doc.exists) {
-      return doc['name'] ?? 'Anonim';
+      return (doc.data()?['name'] as String?) ?? 'Anonim';
     }
     return 'Anonim';
   }

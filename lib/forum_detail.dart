@@ -1,15 +1,23 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'forum_service.dart';
 
 class ForumDetailPage extends StatefulWidget {
+  final String postId;
   final String title;
-  final String message;
+  final String content;
+  final String userId;
   final File? image;
 
   const ForumDetailPage({
     super.key,
+    required this.postId,
     required this.title,
-    required this.message,
+    required this.content,
+    required this.userId,
     this.image,
   });
 
@@ -19,101 +27,83 @@ class ForumDetailPage extends StatefulWidget {
 
 class _ForumDetailPageState extends State<ForumDetailPage> {
   final TextEditingController _commentController = TextEditingController();
+  final ForumService _forumService = ForumService();
+  final _auth = FirebaseAuth.instance;
 
-  // contoh sigma
-  List<Map<String, dynamic>> comments = [
-    {
-      "user": "Rafi",
-      "text": "Wah topiknya menarik banget!",
-      "replies": [
-        {"user": "Dina", "text": "Setuju, aku juga penasaran sama pendapat lain!"}
-      ]
-    },
-  ];
-
-  String? replyingTo;
-
-  void addComment({String? replyTo}) {
+  Future<void> _sendComment() async {
     final text = _commentController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Komentar tidak boleh kosong')),
+      );
+      return;
+    }
 
-    setState(() {
-      if (replyTo == null) {
-        comments.add({"user": "You", "text": text, "replies": []});
-      } else {
-        final comment = comments.firstWhere((c) => c["user"] == replyTo);
-        comment["replies"].add({"user": "You", "text": text});
-      }
+    final uid = _auth.currentUser?.uid ?? 'anon';
+    try {
+      await _forumService.addComment(
+        postId: widget.postId,
+        userId: uid,
+        content: text,
+      );
       _commentController.clear();
-      replyingTo = null;
-    });
+      FocusScope.of(context).unfocus();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengirim komentar: $e')),
+      );
+    }
   }
 
-  Widget buildComment(Map<String, dynamic> comment) {
-    return Card(
-      color: Colors.white,
-      elevation: 1,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(comment["user"],
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, color: Color(0xFF3D5A80))),
-            const SizedBox(height: 4),
-            Text(comment["text"]),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  replyingTo = comment["user"];
-                });
-              },
-              child: const Text(
-                "Balas",
-                style: TextStyle(color: Colors.blue, fontSize: 14),
-              ),
-            ),
-            const SizedBox(height: 6),
+  Widget _buildCommentItem(DocumentSnapshot doc) {
+    final data = (doc.data() as Map<String, dynamic>?) ?? {};
+    final content = (data['content'] as String?) ?? '';
+    final userId = (data['userId'] as String?) ?? 'anon';
+    final tsServer = data['createdAt'] as Timestamp?;
+    final tsLocal = data['localCreatedAt'] as Timestamp?;
+    final createdAt = (tsServer ?? tsLocal)?.toDate();
 
-            if (comment["replies"] != null && comment["replies"].isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(left: 20),
-                child: Column(
-                  children: comment["replies"]
-                      .map<Widget>(
-                        (r) => Card(
-                          color: const Color(0xFFF1F1F1),
-                          elevation: 0,
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(r["user"],
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87)),
-                                const SizedBox(height: 3),
-                                Text(r["text"]),
-                              ],
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-          ],
-        ),
-      ),
+    return FutureBuilder<String>(
+      future: _forumService.getUserName(userId),
+      builder: (context, snap) {
+        final displayName =
+            (snap.data?.isNotEmpty ?? false) ? snap.data! : userId;
+        return Card(
+          color: Colors.white,
+          elevation: 1,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(displayName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF3D5A80),
+                    )),
+                const SizedBox(height: 4),
+                Text(content),
+                if (createdAt != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    createdAt.toString(),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
   }
 
   @override
@@ -122,6 +112,7 @@ class _ForumDetailPageState extends State<ForumDetailPage> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF3D5A80),
         elevation: 0,
+        title: const Text('Detail Post'),
       ),
       body: Column(
         children: [
@@ -131,8 +122,7 @@ class _ForumDetailPageState extends State<ForumDetailPage> {
               children: [
                 Text(
                   widget.title,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 if (widget.image != null)
@@ -142,7 +132,7 @@ class _ForumDetailPageState extends State<ForumDetailPage> {
                   ),
                 const SizedBox(height: 12),
                 Text(
-                  widget.message,
+                  widget.content,
                   style: const TextStyle(fontSize: 16, height: 1.5),
                 ),
                 const Divider(thickness: 1.2, height: 30),
@@ -150,20 +140,46 @@ class _ForumDetailPageState extends State<ForumDetailPage> {
                 const Text(
                   "Komentar",
                   style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF3D5A80)),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF3D5A80),
+                  ),
                 ),
                 const SizedBox(height: 10),
-                if (comments.isEmpty)
-                  const Text("Belum ada komentar, jadilah yang pertama!",
-                      style: TextStyle(color: Colors.grey)),
-                ...comments.map(buildComment).toList(),
+
+                // ===== Realtime comments dari Firestore (stabil dengan localCreatedAt) =====
+                StreamBuilder<QuerySnapshot>(
+                  stream: _forumService.getComments(widget.postId),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      return Text('Terjadi kesalahan: ${snapshot.error}');
+                    }
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const Text(
+                        "Belum ada komentar, jadilah yang pertama!",
+                        style: TextStyle(color: Colors.grey),
+                      );
+                    }
+
+                    final docs = snapshot.data!.docs;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: docs.map(_buildCommentItem).toList());
+                  },
+                ),
+
                 const SizedBox(height: 80),
               ],
             ),
           ),
 
+          // ===== Input komentar =====
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             color: Colors.white,
@@ -172,27 +188,26 @@ class _ForumDetailPageState extends State<ForumDetailPage> {
                 Expanded(
                   child: TextField(
                     controller: _commentController,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _sendComment(),
                     decoration: InputDecoration(
-                      hintText: replyingTo == null
-                          ? "Tulis komentar..."
-                          : "Balas ke $replyingTo...",
+                      hintText: "Tulis komentar...",
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: Colors.grey),
                       ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 12),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: () =>
-                      addComment(replyTo: replyingTo),
+                  onPressed: _sendComment,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF3D5A80),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   child: const Icon(Icons.send, color: Colors.white),
                 ),

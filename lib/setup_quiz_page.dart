@@ -3,21 +3,39 @@ import 'package:flutter/services.dart';
 import 'form_quiz_page.dart';
 
 class SetupQuizPage extends StatefulWidget {
-  const SetupQuizPage({super.key});
+  // terima videoId dari AdminHomePage
+  final String videoId;
+  // opsional: kalau nanti kamu mau mode edit, bisa kirim jumlah awal
+  final int? initialJumlah;
+
+  const SetupQuizPage({
+    super.key,
+    required this.videoId,
+    this.initialJumlah,
+  });
 
   @override
   State<SetupQuizPage> createState() => _SetupQuizPageState();
 }
 
 class _SetupQuizPageState extends State<SetupQuizPage> {
-  final _videoController = TextEditingController();
-  final _jumlahController = TextEditingController();
+  late final TextEditingController _videoController;
+  late final TextEditingController _jumlahController;
   final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _videoController = TextEditingController(text: widget.videoId);
+    _jumlahController = TextEditingController(
+      text: widget.initialJumlah != null ? widget.initialJumlah.toString() : '',
+    );
+  }
 
   void _submit() {
     if (_formKey.currentState!.validate()) {
-      final String videoID = _videoController.text;
-      final int? jumlah = int.tryParse(_jumlahController.text);
+      final String videoID = _videoController.text.trim();
+      final int? jumlah = int.tryParse(_jumlahController.text.trim());
 
       if (jumlah != null && jumlah > 0) {
         Navigator.push(
@@ -42,14 +60,16 @@ class _SetupQuizPageState extends State<SetupQuizPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isEdit = widget.initialJumlah != null;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFAF9F6),
       appBar: AppBar(
         backgroundColor: const Color(0xFF3D5A80),
         elevation: 0,
-        title: const Text(
-          'Setup Quiz Baru',
-          style: TextStyle(
+        title: Text(
+          isEdit ? 'Edit Quiz' : 'Setup Quiz Baru',
+          style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w600,
           ),
@@ -64,9 +84,9 @@ class _SetupQuizPageState extends State<SetupQuizPage> {
             key: _formKey,
             child: Column(
               children: [
-                const Text(
-                  'Masukkan Detail Quiz',
-                  style: TextStyle(
+                Text(
+                  isEdit ? 'Perbarui Detail Quiz' : 'Masukkan Detail Quiz',
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF293241),
@@ -74,14 +94,16 @@ class _SetupQuizPageState extends State<SetupQuizPage> {
                 ),
                 const SizedBox(height: 30),
 
-                // Input Video ID
+                // Video ID (terisi & readOnly)
                 TextFormField(
                   controller: _videoController,
+                  readOnly: true,
                   decoration: InputDecoration(
-                    labelText: 'Video ID (yang akan dites)',
+                    labelText: 'Video ID',
                     labelStyle: const TextStyle(color: Color(0xFF293241)),
                     filled: true,
                     fillColor: const Color(0xFFE0FBFC),
+                    suffixIcon: const Icon(Icons.lock_outline),
                     focusedBorder: OutlineInputBorder(
                       borderSide: const BorderSide(color: Color(0xFF3D5A80), width: 2),
                       borderRadius: BorderRadius.circular(14),
@@ -91,16 +113,10 @@ class _SetupQuizPageState extends State<SetupQuizPage> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Video ID wajib diisi';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 20),
 
-                // Input Jumlah Pertanyaan
+                // Jumlah Pertanyaan
                 TextFormField(
                   controller: _jumlahController,
                   keyboardType: TextInputType.number,
@@ -123,7 +139,8 @@ class _SetupQuizPageState extends State<SetupQuizPage> {
                     if (value == null || value.isEmpty) {
                       return 'Harap isi jumlah';
                     }
-                    if (int.tryParse(value) == null || int.parse(value) <= 0) {
+                    final n = int.tryParse(value);
+                    if (n == null || n <= 0) {
                       return 'Masukkan angka positif';
                     }
                     return null;
@@ -144,9 +161,9 @@ class _SetupQuizPageState extends State<SetupQuizPage> {
                       ),
                       elevation: 3,
                     ),
-                    child: const Text(
-                      'Buat Form',
-                      style: TextStyle(
+                    child: Text(
+                      isEdit ? 'Perbarui Form' : 'Buat Form',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

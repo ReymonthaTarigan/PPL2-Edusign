@@ -6,11 +6,40 @@ import 'forum.dart';
 import 'setting.dart';
 import 'category_videos_page.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  // Stream dasar untuk pencarian: ambil video terbaru lalu filter di client
+  Stream<QuerySnapshot<Map<String, dynamic>>> _searchBaseStream() {
+    return FirebaseFirestore.instance
+        .collection('videos')
+        .orderBy('timestamp', descending: true)
+        .limit(100) // naikkan kalau dataset makin besar
+        .withConverter<Map<String, dynamic>>(
+          fromFirestore: (snap, _) => snap.data() ?? {},
+          toFirestore: (data, _) => data,
+        )
+        .snapshots();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final bool isSearching = _query.trim().isNotEmpty;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFAF9F6),
       body: SafeArea(
@@ -18,7 +47,7 @@ class HomePage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // HEADER
+              // ===== HEADER =====
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -66,17 +95,34 @@ class HomePage extends StatelessWidget {
                       },
                     ),
                     const SizedBox(height: 16),
+
+                    // ===== SEARCH BOX (tanpa hamburger) =====
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(28),
                       ),
-                      child: const TextField(
+                      child: TextField(
+                        controller: _searchCtrl,
+                        onChanged: (v) => setState(() => _query = v),
+                        textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
-                          hintText: "Search...",
-                          prefixIcon: Icon(Icons.menu),
-                          suffixIcon: Icon(Icons.search),
+                          hintText: "Search videos by title...",
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _query.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.close),
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                    setState(() => _query = '');
+                                  },
+                                ),
                           border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 12,
+                          ),
                         ),
                       ),
                     ),
@@ -86,135 +132,216 @@ class HomePage extends StatelessWidget {
 
               const SizedBox(height: 30),
 
-              // CATEGORY
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  "Subjects",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              SizedBox(
-                height: 120,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      _buildCategory(context, "Matematika", Colors.amber[700]!),
-                      _buildCategory(context, "Bahasa Indonesia", Colors.green),
-                      _buildCategory(context, "IPA", Colors.blue),
-                      _buildCategory(context, "IPS", Colors.red),
-                      _buildCategory(context, "Bahasa Inggris", Colors.purple),
-                      _buildCategory(context, "PPKN", Colors.deepOrange),
-                      _buildCategory(context, "Seni Budaya", Colors.teal),
-                      _buildCategory(context, "PJOK", Colors.brown),
-                    ],
+              // ===== MODE PENCARIAN =====
+              if (isSearching) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    "Search results",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                   ),
                 ),
-              ),
+                const SizedBox(height: 12),
 
-              const SizedBox(height: 40),
-
-              // RECENTLY VIEWED (list semua video versi sederhana)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text(
-                      "Recently Viewed",
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
-                    ),
-                    Text(
-                      "See All",
-                      style: TextStyle(color: Colors.blue, fontSize: 18),
-                    ),
-                  ],
-                ),
-              ),
-
-              // VIDEO LIST
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('videos')
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Text("No videos available"),
-                      );
-                    }
-
-                    final videos = snapshot.data!.docs;
-                    return Column(
-                      children: List.generate(videos.length, (i) {
-                        final doc = videos[i]; // <-- ambil DocumentSnapshot
-                        final data = doc.data() as Map<String, dynamic>;
-                        final title = data['title'] ?? 'Untitled';
-                        final link = data['link'] ?? '';
-                        final signLang = data['signLanguage'];
-                        final subtitle = data['subtitle'];
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 4,
-                          child: ListTile(
-                            leading: const Icon(Icons.play_circle_fill,
-                                color: Colors.blue, size: 40),
-                            title: Text(title),
-                            subtitle: const Text("Tap to watch"),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => VideoDetailPage(
-                                    title: title,
-                                    videoUrl: link,
-                                    signLangUrl: signLang,
-                                    subtitle: subtitle,
-                                    videoDocId: doc.id, // <-- KIRIM doc.id KE DETAIL
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: _searchBaseStream(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: CircularProgressIndicator()),
                         );
-                      }),
-                    );
-                  },
-                ),
-              ),
+                      }
+                      final docs = snapshot.data?.docs ?? [];
+                      final q = _query.toLowerCase().trim();
 
-              const SizedBox(height: 20),
+                      // Filter contains + case-insensitive
+                      final filtered = docs.where((d) {
+                        final data = d.data();
+                        final title = (data['title'] ?? '').toString().toLowerCase();
+                        return title.contains(q);
+                      }).toList();
+
+                      if (filtered.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text("No results"),
+                        );
+                      }
+
+                      return Column(
+                        children: filtered.map((doc) {
+                          final data = doc.data();
+                          final title = (data['title'] ?? 'Untitled').toString();
+                          final link = (data['link'] ?? '').toString();
+                          final signLang = data['signLanguage'];
+                          final subtitle = data['subtitle'];
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 4,
+                            child: ListTile(
+                              leading: const Icon(Icons.play_circle_fill,
+                                  color: Colors.blue, size: 40),
+                              title: Text(title),
+                              subtitle: const Text("Tap to watch"),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => VideoDetailPage(
+                                      title: title,
+                                      videoUrl: link,
+                                      signLangUrl: signLang,
+                                      subtitle: subtitle,
+                                      videoDocId: doc.id,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+              ]
+
+              // ===== MODE NORMAL =====
+              else ...[
+                // CATEGORY
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    "Subjects",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                SizedBox(
+                  height: 120,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        _buildCategory(context, "Matematika", Colors.amber[700]!),
+                        _buildCategory(context, "Bahasa Indonesia", Colors.green),
+                        _buildCategory(context, "IPA", Colors.blue),
+                        _buildCategory(context, "IPS", Colors.red),
+                        _buildCategory(context, "Bahasa Inggris", Colors.purple),
+                        _buildCategory(context, "PPKN", Colors.deepOrange),
+                        _buildCategory(context, "Seni Budaya", Colors.teal),
+                        _buildCategory(context, "PJOK", Colors.brown),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                // Recently added
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Text(
+                    "Recently added",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('videos')
+                        .orderBy('timestamp', descending: true)
+                        .limit(5)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text("No videos available"),
+                        );
+                      }
+
+                      final videos = snapshot.data!.docs;
+                      return Column(
+                        children: List.generate(videos.length, (i) {
+                          final doc = videos[i];
+                          final data = doc.data() as Map<String, dynamic>;
+                          final title = data['title'] ?? 'Untitled';
+                          final link = data['link'] ?? '';
+                          final signLang = data['signLanguage'];
+                          final subtitle = data['subtitle'];
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 4,
+                            child: ListTile(
+                              leading: const Icon(
+                                Icons.play_circle_fill,
+                                color: Colors.blue,
+                                size: 40,
+                              ),
+                              title: Text(title),
+                              subtitle: const Text("Tap to watch"),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => VideoDetailPage(
+                                      title: title,
+                                      videoUrl: link,
+                                      signLangUrl: signLang,
+                                      subtitle: subtitle,
+                                      videoDocId: doc.id,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        }),
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+              ],
             ],
           ),
         ),
       ),
 
-      // BOTTOM NAV
+      // ===== BOTTOM NAV =====
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 0,
         selectedItemColor: Colors.blue[900],
         unselectedItemColor: Colors.black54,
         onTap: (index) {
-          if (index == 2) {
+          if (index == 1) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const ForumPage()),
             );
-          } else if (index == 3) {
+          } else if (index == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const ProfilePage()),
@@ -223,7 +350,6 @@ class HomePage extends StatelessWidget {
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Subject'),
           BottomNavigationBarItem(icon: Icon(Icons.forum), label: 'Forum'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],

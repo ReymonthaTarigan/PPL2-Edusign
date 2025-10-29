@@ -6,6 +6,9 @@ import 'package:video_player/video_player.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:edu_sign/quiz_page.dart';
 
+// Firestore + Auth
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class VideoDetailPage extends StatefulWidget {
   final String title;
@@ -13,7 +16,7 @@ class VideoDetailPage extends StatefulWidget {
   final String? signLangUrl;
   final String? subtitle;
 
-  /// Tambahan: id dokumen koleksi `videos` (doc.id) — ini yang akan dipakai sebagai videoID kuis
+  /// id dokumen koleksi `videos` (doc.id) — dipakai untuk kuis & fallback videoId komentar
   final String? videoDocId;
 
   const VideoDetailPage({
@@ -40,24 +43,13 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   int _lastCueIdx = -1;
   String? _currentSubtitle;
 
-  final List<Comment> _comments = [
-    Comment(
-      name: "Rani Kusuma",
-      avatarUrl: "https://i.pravatar.cc/150?img=3",
-      text: "Videonya sangat informatif!",
-      replies: [
-        Comment(
-          name: "Bima Setiawan",
-          avatarUrl: "https://i.pravatar.cc/150?img=12",
-          text: "Setuju banget, apalagi bagian penjelasan terakhir.",
-        ),
-      ],
-    ),
-  ];
-
+  // ===== Komentar =====
   final TextEditingController _commentController = TextEditingController();
   Comment? _replyingTo;
-  final Map<Comment, bool> _showReplies = {};
+  final Map<String, String> _nameCache = {}; // uid -> name cache
+
+  // ===== Auth =====
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   bool get _isYouTube {
     final u = Uri.tryParse(widget.videoUrl);
@@ -75,6 +67,15 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       return uri.queryParameters['v'];
     }
     return null;
+  }
+
+  /// videoId untuk komentar:
+  /// - Prioritas: doc.id dari koleksi `videos`
+  /// - Fallback: id YouTube dari url
+  String? get _videoIdForComments {
+    return widget.videoDocId?.isNotEmpty == true
+        ? widget.videoDocId
+        : _extractId(widget.videoUrl);
   }
 
   @override
@@ -103,6 +104,17 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         });
     }
   }
+
+  @override
+  void dispose() {
+    _ytTicker?.cancel();
+    _mp4Main?.dispose();
+    _yt?.close();
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  // ================= Subtitles =================
 
   Future<void> _loadSrtFromUrl(String? url) async {
     if (url == null || url.isEmpty) return;
@@ -136,8 +148,10 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     while (i < lines.length) {
       while (i < lines.length && lines[i].trim().isEmpty) i++;
       if (i >= lines.length) break;
-      i++;
+
+      i++; // skip cue index line
       if (i >= lines.length) break;
+
       final timeLine = lines[i].trim();
       final m = RegExp(
         r'(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})',
@@ -202,10 +216,8 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     if (v.playerState == PlayerState.playing) {
       _ytTicker ??= Timer.periodic(_tick, (_) async {
         final seconds = await _yt!.currentTime;
-        if (seconds != null) {
-          final pos = Duration(milliseconds: (seconds * 1000).round());
-          _updateSubtitle(pos);
-        }
+        final pos = Duration(milliseconds: (seconds * 1000).round());
+        _updateSubtitle(pos);
       });
     } else {
       _ytTicker?.cancel();
@@ -219,99 +231,138 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     _updateSubtitle(main.position);
   }
 
-  void _addComment(String text) {
-    if (text.trim().isEmpty) return;
-    setState(() {
-      if (_replyingTo != null) {
-        _replyingTo!.replies.add(
-          Comment(
-            name: "Kamu",
-            avatarUrl: "https://i.pravatar.cc/150?img=20",
-            text: text,
-          ),
-        );
-        _showReplies[_replyingTo!] = true;
-        _replyingTo = null;
-      } else {
-        _comments.add(Comment(
-          name: "Kamu",
-          avatarUrl: "https://i.pravatar.cc/150?img=20",
-          text: text,
-        ));
-      }
-      _commentController.clear();
-    });
+  // ================= Komentar (Firestore) =================
+
+  /// Stream komentar — where(videoId) + orderBy(localCreatedAt desc)
+  Stream<QuerySnapshot<Map<String, dynamic>>>? get _commentStream {
+    final vid = _videoIdForComments;
+    if (vid == null || vid.isEmpty) return null;
+    final col = FirebaseFirestore.instance.collection('comments');
+    return col
+        .where('videoId', isEqualTo: vid)
+        .orderBy('localCreatedAt', descending: true)
+        .snapshots();
   }
 
-  Widget _buildComment(Comment comment) {
-    final isExpanded = _showReplies[comment] ?? false;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Divider(thickness: 1, color: Color(0xFF293241)),
-        Row(children: [
-          CircleAvatar(backgroundImage: NetworkImage(comment.avatarUrl), radius: 18),
-          const SizedBox(width: 8),
-          Text(comment.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF293241))),
-        ]),
-        const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.only(left: 42.0),
-          child: Text(comment.text, style: const TextStyle(color: Color(0xFF293241))),
-        ),
-        Row(
-          children: [
-            TextButton(
-              onPressed: () => setState(() => _replyingTo = comment),
-              child: const Text("Balas", style: TextStyle(color: Color(0xFF293241))),
-            ),
-            if (comment.replies.isNotEmpty)
-              TextButton(
-                onPressed: () => setState(() => _showReplies[comment] = !isExpanded),
-                child: Text(
-                  isExpanded ? "Sembunyikan Balasan" : "Lihat ${comment.replies.length} Balasan",
-                  style: const TextStyle(color: Color(0xFF293241)),
-                ),
+  /// Kirim komentar baru (userId = uid login)
+  Future<void> _sendCommentToFirestore(String text) async {
+    final vid = _videoIdForComments;
+    if (vid == null || vid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Video ID tidak ditemukan untuk komentar.')),
+      );
+      return;
+    }
+    final content = text.trim();
+    if (content.isEmpty) return;
+
+    final String uid = _auth.currentUser?.uid ?? 'guru';
+
+    try {
+      await FirebaseFirestore.instance.collection('comments').add({
+        'content': content,
+        'videoId': vid,
+        'userId': uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'localCreatedAt': DateTime.now(),
+      });
+      _commentController.clear();
+      setState(() => _replyingTo = null);
+      FocusScope.of(context).unfocus();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengirim komentar: $e')),
+      );
+    }
+  }
+
+  // ====== Prefetch nama user mirip forum_service.getUserName, tapi batch ======
+  Future<Map<String, String>> _getNamesForUids(List<String> uids) async {
+    // Gunakan cache lebih dulu
+    final result = <String, String>{};
+    final missing = <String>[];
+    for (final uid in uids) {
+      if (_nameCache.containsKey(uid)) {
+        result[uid] = _nameCache[uid]!;
+      } else {
+        missing.add(uid);
+      }
+    }
+    if (missing.isEmpty) return result;
+
+    // Firestore whereIn maksimal 10 item per query → chunk
+    for (var i = 0; i < missing.length; i += 10) {
+      final chunk = missing.sublist(i, (i + 10).clamp(0, missing.length));
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+
+        for (final doc in snap.docs) {
+          final data = doc.data();
+          final name = (data['name'] as String?) ??
+              (data['displayName'] as String?) ??
+              doc.id; // fallback uid
+          _nameCache[doc.id] = name;
+          result[doc.id] = name;
+        }
+
+        // Jika ada uid yang tidak ada dokumennya, isi "Guru" biar nggak query ulang
+        final foundIds = snap.docs.map((d) => d.id).toSet();
+        for (final uid in chunk) {
+          if (!foundIds.contains(uid)) {
+            _nameCache[uid] = 'Guru';
+            result[uid] = 'Guru';
+          }
+        }
+      } catch (e) {
+        // Jika error (misal rules), jangan crash – isi fallback
+        for (final uid in chunk) {
+          _nameCache[uid] = 'Guru';
+          result[uid] = 'Guru';
+        }
+      }
+    }
+    return result;
+  }
+
+  // ================= UI =================
+
+  Widget _buildPlayerArea() {
+    final Widget mainPlayer = _isYouTube
+        ? (_yt == null
+            ? const Center(child: Text('Link YouTube tidak valid.'))
+            : YoutubePlayer(controller: _yt!))
+        : (_mp4Main == null || !_mp4Main!.value.isInitialized)
+            ? const Center(child: CircularProgressIndicator())
+            : AspectRatio(
+                aspectRatio: _mp4Main!.value.aspectRatio,
+                child: VideoPlayer(_mp4Main!),
+              );
+    return Stack(children: [
+      Positioned.fill(child: mainPlayer),
+      if (_showSubtitle && (_currentSubtitle?.isNotEmpty ?? false))
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 8,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.55),
+                borderRadius: BorderRadius.circular(8),
               ),
-          ],
-        ),
-        if (isExpanded)
-          Container(
-            margin: const EdgeInsets.only(left: 42, bottom: 8),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE0FBFC), borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              children: comment.replies.map((r) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CircleAvatar(backgroundImage: NetworkImage(r.avatarUrl), radius: 14),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(r.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, color: Color(0xFF293241))),
-                            Text(r.text, style: const TextStyle(color: Color(0xFF293241))),
-                          ],
-                        ),
-                      )
-                    ],
-                  ),
-                );
-              }).toList(),
+              child: Text(
+                _currentSubtitle!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              ),
             ),
           ),
-        const Divider(thickness: 1, color: Color(0xFF293241)),
-      ],
-    );
+        ),
+    ]);
   }
 
   @override
@@ -324,13 +375,11 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             children: [
               AspectRatio(aspectRatio: 16 / 9, child: _buildPlayerArea()),
 
-              // Toggle subtitle
               TextButton(
                 onPressed: () => setState(() => _showSubtitle = !_showSubtitle),
                 child: Text(_showSubtitle ? 'Hide Subtitle' : 'Show Subtitle'),
               ),
 
-              // === TOMBOL QUIZ (pakai doc.id dari koleksi `videos`) ===
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: SizedBox(
@@ -365,22 +414,98 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                 ),
               ),
 
-              // ===== Komentar =====
+              // ===== Komentar (Realtime) =====
               Expanded(
                 child: Container(
                   color: const Color(0xFFFAF9F6),
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
-                    children: [
-                      const Text(
-                        "Komentar",
-                        style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF293241),
+                  child: (_commentStream == null)
+                      ? const Padding(
+                          padding: EdgeInsets.only(top: 12),
+                          child: Text(
+                            "Video ID tidak ditemukan. Komentar tidak dapat dimuat.",
+                            style: TextStyle(color: Color(0xFF293241)),
+                          ),
+                        )
+                      : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                          stream: _commentStream,
+                          builder: (context, snap) {
+                            if (snap.connectionState == ConnectionState.waiting) {
+                              return const Padding(
+                                padding: EdgeInsets.all(12.0),
+                                child: Center(child: CircularProgressIndicator()),
+                              );
+                            }
+                            if (snap.hasError) {
+                              return Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: Text('Gagal memuat komentar: ${snap.error}',
+                                    style: const TextStyle(color: Color(0xFF293241))),
+                              );
+                            }
+
+                            final docs = snap.data?.docs ?? [];
+                            if (docs.isEmpty) {
+                              return const Padding(
+                                padding: EdgeInsets.only(top: 12),
+                                child: Text(
+                                  "Belum ada komentar. Jadilah yang pertama!",
+                                  style: TextStyle(color: Color(0xFF293241)),
+                                ),
+                              );
+                            }
+
+                            // Kumpulkan semua uid unik lalu prefetch namanya (batch)
+                            final uids = <String>{
+                              for (final d in docs)
+                                (d.data()['userId'] ?? 'guru').toString(),
+                            }.toList();
+
+                            return FutureBuilder<Map<String, String>>(
+                              future: _getNamesForUids(uids),
+                              builder: (context, nameSnap) {
+                                final nameMap = nameSnap.data ?? const <String, String>{};
+
+                                return ListView.separated(
+                                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
+                                  itemCount: docs.length + 1,
+                                  separatorBuilder: (_, __) =>
+                                      const Divider(thickness: 1, color: Color(0xFF293241)),
+                                  itemBuilder: (context, index) {
+                                    if (index == 0) {
+                                      return const Padding(
+                                        padding: EdgeInsets.only(bottom: 8.0),
+                                        child: Text(
+                                          "Komentar",
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF293241),
+                                          ),
+                                        ),
+                                      );
+                                    }
+
+                                    final d = docs[index - 1];
+                                    final data = d.data();
+                                    final text = (data['content'] ?? '').toString();
+                                    final userId = (data['userId'] ?? 'guru').toString();
+
+                                    // Ambil nama dari map/cached
+                                    final displayName = nameMap[userId] ??
+                                        _nameCache[userId] ??
+                                        userId; // sementara pakai uid sampai future resolve
+
+                                    return _buildCommentCard(
+                                      name: displayName.isNotEmpty ? displayName : 'Guru',
+                                      avatarUrl: "https://i.pravatar.cc/150?u=$userId",
+                                      text: text,
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
                         ),
-                      ),
-                      for (var comment in _comments) _buildComment(comment),
-                    ],
-                  ),
                 ),
               ),
             ],
@@ -431,6 +556,11 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                     Expanded(
                       child: TextField(
                         controller: _commentController,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) async {
+                          final text = _commentController.text;
+                          await _sendCommentToFirestore(text);
+                        },
                         decoration: InputDecoration(
                           hintText: "Tulis komentar...",
                           hintStyle: const TextStyle(color: Color(0xFF293241)),
@@ -447,7 +577,10 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.send, color: Color(0xFFE0FBFC)),
-                      onPressed: () => _addComment(_commentController.text),
+                      onPressed: () async {
+                        final text = _commentController.text;
+                        await _sendCommentToFirestore(text);
+                      },
                     ),
                   ],
                 ),
@@ -459,40 +592,33 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     );
   }
 
-  Widget _buildPlayerArea() {
-    final Widget mainPlayer = _isYouTube
-        ? (_yt == null
-            ? const Center(child: Text('Link YouTube tidak valid.'))
-            : YoutubePlayer(controller: _yt!))
-        : (_mp4Main == null || !_mp4Main!.value.isInitialized)
-            ? const Center(child: CircularProgressIndicator())
-            : AspectRatio(
-                aspectRatio: _mp4Main!.value.aspectRatio,
-                child: VideoPlayer(_mp4Main!),
-              );
-    return Stack(children: [
-      Positioned.fill(child: mainPlayer),
-      if (_showSubtitle && (_currentSubtitle?.isNotEmpty ?? false))
-        Positioned(
-          left: 12,
-          right: 12,
-          bottom: 8,
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.55),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _currentSubtitle!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-              ),
+  Widget _buildCommentCard({
+    required String name,
+    required String avatarUrl,
+    required String text,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(thickness: 1, color: Color(0xFF293241)),
+        Row(
+          children: [
+            CircleAvatar(backgroundImage: NetworkImage(avatarUrl), radius: 18),
+            const SizedBox(width: 8),
+            Text(
+              name,
+              style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF293241)),
             ),
-          ),
+          ],
         ),
-    ]);
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.only(left: 42.0),
+          child: Text(text, style: const TextStyle(color: Color(0xFF293241))),
+        ),
+        const Divider(thickness: 1, color: Color(0xFF293241)),
+      ],
+    );
   }
 }
 

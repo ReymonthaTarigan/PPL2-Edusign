@@ -13,7 +13,7 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  int _selectedIndex = 3;
+  int _selectedIndex = 2;
   String name = "-";
   String jenjang = "-";
   String email = "-";
@@ -79,7 +79,7 @@ class _ProfilePageState extends State<ProfilePage> {
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
       );
-    } else if (index == 2) {
+    } else if (index == 1) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const ForumPage()), // ⬅️ Navigasi ke Forum
@@ -151,7 +151,6 @@ class _ProfilePageState extends State<ProfilePage> {
         unselectedItemColor: Colors.black54,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Subject'),
           BottomNavigationBarItem(icon: Icon(Icons.forum), label: 'Forum'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],

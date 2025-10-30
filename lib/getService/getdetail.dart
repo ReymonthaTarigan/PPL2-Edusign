@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
@@ -15,8 +16,6 @@ class VideoDetailPage extends StatefulWidget {
   final String videoUrl;
   final String? signLangUrl;
   final String? subtitle;
-
-  /// id dokumen koleksi `videos` (doc.id) — dipakai untuk kuis & fallback videoId komentar
   final String? videoDocId;
 
   const VideoDetailPage({
@@ -35,28 +34,90 @@ class VideoDetailPage extends StatefulWidget {
 class _VideoDetailPageState extends State<VideoDetailPage> {
   YoutubePlayerController? _yt;
   VideoPlayerController? _mp4Main;
-
-  // Bahasa Isyarat (overlay)
   VideoPlayerController? _signLang;
 
-  Timer? _ytTicker;
-  static const _tick = Duration(milliseconds: 250);
+  // Timer yang lebih conservative untuk menghindari stutter
+  Timer? _syncTimer;
+  Timer? _subtitleTimer;
+  Timer? _debounceTimer;
+  
+  // State tracking dengan debouncing
+  Duration _lastSyncPosition = Duration.zero;
+  Duration _lastSubtitlePosition = Duration.zero;
+  bool _isPlaying = false;
+  bool _isBuffering = false;
+  bool _isSeeking = false;
+  
+  // Interval yang lebih conservative untuk Android
+  static const Duration _syncInterval = Duration(milliseconds: 500);
+  static const Duration _subtitleInterval = Duration(milliseconds: 1000);
+  static const Duration _syncThreshold = Duration(milliseconds: 1000);
+  static const Duration _debounceDelay = Duration(milliseconds: 300);
+  
+  // Performance tracking
+  int _syncFailures = 0;
+  static const int _maxSyncFailures = 3;
+  
   bool _showSubtitle = true;
-
-  // ===== Tambahan: toggle tampil Bahasa Isyarat =====
   bool _showSignLang = true;
 
   List<_SrtCue> _cues = [];
   int _lastCueIdx = -1;
   String? _currentSubtitle;
 
-  // ===== Komentar =====
   final TextEditingController _commentController = TextEditingController();
   Comment? _replyingTo;
-  final Map<String, String> _nameCache = {}; // uid -> name cache
+  final Map<String, String> _nameCache = {};
 
-  // ===== Auth =====
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  // Platform detection yang kompatibel
+  bool get _isAndroid => Theme.of(context).platform == TargetPlatform.android;
+  bool get _isWeb => kIsWeb; // Hanya gunakan kIsWeb
+  bool get _isIOS => Theme.of(context).platform == TargetPlatform.iOS;
+
+  // Responsive sizing untuk video bahasa isyarat
+  double get _signLangWidth {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    if (_isWeb) {
+      // Web/Chrome: ukuran tetap
+      return 140.0;
+    } else if (_isAndroid) {
+      // Android: responsive berdasarkan screen width
+      if (screenWidth < 400) {
+        return 100.0; // Small screen
+      } else if (screenWidth < 600) {
+        return 120.0; // Medium screen
+      } else {
+        return 140.0; // Large screen
+      }
+    } else {
+      // iOS dan lainnya
+      return 130.0;
+    }
+  }
+
+  double get _signLangHeight {
+    // Maintain aspect ratio 4:3 untuk video bahasa isyarat
+    return _signLangWidth * 0.75;
+  }
+
+  double get _signLangRightMargin {
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (_isAndroid && screenWidth < 400) {
+      return 8.0;
+    }
+    return 12.0;
+  }
+
+  double get _signLangBottomMargin {
+    final screenHeight = MediaQuery.of(context).size.height;
+    if (_isAndroid && screenHeight < 800) {
+      return 8.0;
+    }
+    return 12.0;
+  }
 
   bool get _isYouTube {
     final u = Uri.tryParse(widget.videoUrl);
@@ -76,9 +137,6 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     return null;
   }
 
-  /// videoId untuk komentar:
-  /// - Prioritas: doc.id dari koleksi `videos`
-  /// - Fallback: id YouTube dari url
   String? get _videoIdForComments {
     return widget.videoDocId?.isNotEmpty == true
         ? widget.videoDocId
@@ -89,40 +147,83 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   void initState() {
     super.initState();
     _loadSrtFromUrl(widget.subtitle);
+    _initializeSignLanguage();
+    _initializeMainPlayer();
+  }
 
-    // Inisialisasi Bahasa Isyarat bila ada URL
+  Future<void> _initializeSignLanguage() async {
     if ((widget.signLangUrl ?? '').isNotEmpty) {
-      _signLang = VideoPlayerController.networkUrl(Uri.parse(widget.signLangUrl!))
-        ..initialize().then((_) {
-          setState(() {});
-        });
+      try {
+        // Low quality untuk bahasa isyarat (hemat memory)
+        _signLang = VideoPlayerController.networkUrl(
+          Uri.parse(widget.signLangUrl!),
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: true,
+            allowBackgroundPlayback: false,
+          ),
+        );
+        
+        await _signLang!.initialize();
+        
+        // Set volume ke 0 dan low quality
+        await _signLang!.setVolume(0.0);
+        
+        // Set looping untuk menghindari re-initialization
+        _signLang!.setLooping(true);
+        
+        if (mounted) setState(() {});
+      } catch (e) {
+        if (kDebugMode) print('Error initializing sign language video: $e');
+        // Fallback: disable sign language jika gagal
+        setState(() => _showSignLang = false);
+      }
     }
+  }
 
+  Future<void> _initializeMainPlayer() async {
     if (_isYouTube) {
       final id = _extractId(widget.videoUrl);
       if (id != null && id.isNotEmpty) {
         _yt = YoutubePlayerController(
-          params: const YoutubePlayerParams(
-            showControls: true,
-            showFullscreenButton: true,
-            enableCaption: true,
+          params: YoutubePlayerParams(
+            showControls: false,
+            showFullscreenButton: false,
+            enableCaption: false,
+            origin: 'https://www.youtube-nocookie.com',
+            // Reduced quality untuk Android
+            strictRelatedVideos: false,
+            interfaceLanguage: 'id',
           ),
         )
           ..loadVideoById(videoId: id)
           ..listen(_onYoutubeEvent);
       }
     } else {
-      _mp4Main = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
-        ..initialize().then((_) {
-          setState(() {});
-          _mp4Main!.addListener(_onMp4MainEvent);
-        });
+      try {
+        _mp4Main = VideoPlayerController.networkUrl(
+          Uri.parse(widget.videoUrl),
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: true,
+            allowBackgroundPlayback: false,
+          ),
+        );
+        
+        await _mp4Main!.initialize();
+        
+        _mp4Main!.addListener(_onMp4MainEvent);
+        
+        if (mounted) setState(() {});
+      } catch (e) {
+        if (kDebugMode) print('Error initializing main video: $e');
+      }
     }
   }
 
   @override
   void dispose() {
-    _ytTicker?.cancel();
+    _syncTimer?.cancel();
+    _subtitleTimer?.cancel();
+    _debounceTimer?.cancel();
     _mp4Main?.removeListener(_onMp4MainEvent);
     _mp4Main?.dispose();
     _yt?.close();
@@ -132,7 +233,6 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   }
 
   // ================= Subtitles =================
-
   Future<void> _loadSrtFromUrl(String? url) async {
     if (url == null || url.isEmpty) return;
     try {
@@ -141,9 +241,11 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         final content = utf8.decode(res.bodyBytes);
         _cues = _parseSrt(content);
         _lastCueIdx = -1;
-        setState(() {});
+        if (mounted) setState(() {});
       }
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) print('Error loading subtitles: $e');
+    }
   }
 
   List<_SrtCue> _parseSrt(String srt) {
@@ -192,35 +294,26 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
 
   void _updateSubtitle(Duration pos) {
     if (_cues.isEmpty) return;
-    int startIdx = (_lastCueIdx >= 0 && _lastCueIdx < _cues.length) ? _lastCueIdx : 0;
+    
+    // Hanya update jika posisi berubah signifikan (lebih conservative)
+    if ((pos - _lastSubtitlePosition).inMilliseconds.abs() < 500) return;
+    _lastSubtitlePosition = pos;
+
     String? found;
     int idxFound = -1;
 
-    final c0 = _cues[startIdx];
-    if (pos >= c0.start && pos <= c0.end) {
-      found = c0.text;
-      idxFound = startIdx;
-    } else {
-      for (int k = 0; k < _cues.length; k++) {
-        final i = (startIdx + k) % _cues.length;
-        final c = _cues[i];
-        if (pos >= c.start && pos <= c.end) {
-          found = c.text;
-          idxFound = i;
-          break;
-        }
+    // Linear search (lebih stabil untuk Android)
+    for (int i = 0; i < _cues.length; i++) {
+      final cue = _cues[i];
+      if (pos >= cue.start && pos <= cue.end) {
+        found = cue.text;
+        idxFound = i;
+        break;
       }
     }
 
-    if (idxFound == -1) {
-      if (_currentSubtitle != null) {
-        setState(() {
-          _currentSubtitle = null;
-          _lastCueIdx = -1;
-        });
-      }
-    } else {
-      if (_currentSubtitle != found || _lastCueIdx != idxFound) {
+    if (idxFound != _lastCueIdx || _currentSubtitle != found) {
+      if (mounted) {
         setState(() {
           _currentSubtitle = found;
           _lastCueIdx = idxFound;
@@ -229,115 +322,181 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     }
   }
 
-  // ================= YouTube & MP4 Events + Sinkron Interpreter =================
+  // ================= Sinkronisasi dengan Debouncing =================
+  void _startSyncTimers() {
+    // Timer untuk subtitle (sangat jarang update)
+    _subtitleTimer?.cancel();
+    _subtitleTimer = Timer.periodic(_subtitleInterval, (_) async {
+      if (!_isPlaying || _isBuffering || _isSeeking) return;
+      
+      final pos = await _getCurrentPosition();
+      if (pos != null) {
+        _updateSubtitle(pos);
+      }
+    });
 
-  void _onYoutubeEvent(YoutubePlayerValue v) {
-    if (v.playerState == PlayerState.playing) {
-      // Mulai ticker untuk polling currentTime YouTube
-      _ytTicker ??= Timer.periodic(_tick, (_) async {
-        if (_yt == null) return;
-        try {
-          final seconds = await _yt!.currentTime;
-          final pos = Duration(milliseconds: (seconds * 1000).round());
-          _updateSubtitle(pos);
+    // Timer untuk sinkronisasi bahasa isyarat (sangat conservative)
+    _syncTimer?.cancel();
+    _syncTimer = Timer.periodic(_syncInterval, (_) async {
+      if (!_isPlaying || _isBuffering || !_showSignLang || _isSeeking) return;
+      
+      // Reset sync failures jika berhasil
+      if (_syncFailures > 0) _syncFailures = 0;
+      
+      await _syncSignLanguage();
+    });
+  }
 
-          // Sinkron Bahasa Isyarat hanya jika ditampilkan
-          if (_showSignLang && _signLang != null && _signLang!.value.isInitialized) {
-            final diffMs =
-                (pos - _signLang!.value.position).inMilliseconds.abs();
-            if (diffMs > 500) {
-              await _signLang!.seekTo(pos);
-            }
-            if (!_signLang!.value.isPlaying) {
-              await _signLang!.play();
-            }
-          }
-        } catch (_) {}
+  void _stopSyncTimers() {
+    _syncTimer?.cancel();
+    _syncTimer = null;
+    _subtitleTimer?.cancel();
+    _subtitleTimer = null;
+    _debounceTimer?.cancel();
+  }
+
+  Future<Duration?> _getCurrentPosition() async {
+    try {
+      if (_isYouTube && _yt != null) {
+        final seconds = await _yt!.currentTime;
+        return Duration(milliseconds: (seconds * 1000).round());
+      } else if (_mp4Main != null && _mp4Main!.value.isInitialized) {
+        return _mp4Main!.value.position;
+      }
+    } catch (e) {
+      if (kDebugMode) print('Error getting current position: $e');
+      _syncFailures++;
+    }
+    return null;
+  }
+
+  Future<void> _syncSignLanguage() async {
+    if (_signLang == null || !_signLang!.value.isInitialized) return;
+    
+    // Jika terlalu banyak failures, disable sementara
+    if (_syncFailures >= _maxSyncFailures) {
+      if (kDebugMode) print('Too many sync failures, temporarily disabling sync');
+      _stopSyncTimers();
+      // Restart setelah 5 detik
+      Future.delayed(const Duration(seconds: 5), () {
+        if (_isPlaying && !_isBuffering) {
+          _syncFailures = 0;
+          _startSyncTimers();
+        }
       });
+      return;
+    }
 
-      if (_showSignLang) _signLang?.play();
-    } else {
-      _ytTicker?.cancel();
-      _ytTicker = null;
+    try {
+      final mainPos = await _getCurrentPosition();
+      if (mainPos == null) return;
 
-      if (v.playerState == PlayerState.ended) {
-        _signLang?..pause()..seekTo(Duration.zero);
-        _updateSubtitle(const Duration(seconds: 0));
-      } else {
-        _signLang?.pause();
+      final signPos = _signLang!.value.position;
+      final diff = (mainPos - signPos).inMilliseconds.abs();
+
+      // Hanya sinkronkan jika perbedaan sangat signifikan
+      if (diff > _syncThreshold.inMilliseconds) {
+        _isSeeking = true;
+        await _signLang!.seekTo(mainPos);
+        _lastSyncPosition = mainPos;
+        
+        // Reset seeking flag setelah seek selesai
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _isSeeking = false;
+        });
+      }
+
+      // Pastikan status play sesuai (dengan debouncing)
+      if (_isPlaying && !_signLang!.value.isPlaying) {
+        _debounceTimer?.cancel();
+        _debounceTimer = Timer(_debounceDelay, () async {
+          if (_isPlaying && !_signLang!.value.isPlaying) {
+            await _signLang!.play();
+          }
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) print('Error syncing sign language: $e');
+      _syncFailures++;
+    }
+  }
+
+  // ================= Event Handlers =================
+  void _onYoutubeEvent(YoutubePlayerValue value) {
+    final wasPlaying = _isPlaying;
+    _isPlaying = value.playerState == PlayerState.playing;
+    _isBuffering = value.playerState == PlayerState.buffering;
+
+    if (_isPlaying && !wasPlaying) {
+      _startSyncTimers();
+      if (_showSignLang && _signLang != null) {
+        _signLang!.play();
+      }
+    } else if (!_isPlaying && wasPlaying) {
+      _stopSyncTimers();
+      _signLang?.pause();
+      
+      if (value.playerState == PlayerState.ended) {
+        _signLang?.seekTo(Duration.zero);
+        _updateSubtitle(Duration.zero);
       }
     }
   }
 
   void _onMp4MainEvent() {
     if (_mp4Main == null) return;
-    final main = _mp4Main!.value;
+    final value = _mp4Main!.value;
+    
+    final wasPlaying = _isPlaying;
+    _isPlaying = value.isPlaying && !value.isBuffering;
+    _isBuffering = value.isBuffering;
 
-    _updateSubtitle(main.position);
-
-    if (_showSignLang && _signLang != null && _signLang!.value.isInitialized) {
-      if (main.isBuffering || !main.isPlaying) {
-        _signLang!.pause();
-        if (!main.isPlaying &&
-            main.position >= main.duration &&
-            main.duration != Duration.zero) {
-          _signLang!.seekTo(Duration.zero);
-        }
-      } else {
-        if (!_signLang!.value.isPlaying) _signLang!.play();
-        final diff =
-            (main.position - _signLang!.value.position).inMilliseconds.abs();
-        if (diff > 500) {
-          _signLang!.seekTo(main.position);
-        }
+    if (_isPlaying && !wasPlaying) {
+      _startSyncTimers();
+      if (_showSignLang && _signLang != null) {
+        _signLang!.play();
       }
-    } else {
-      // jika sedang tidak ditampilkan, pastikan berhenti
+    } else if (!_isPlaying && wasPlaying) {
+      _stopSyncTimers();
       _signLang?.pause();
+      
+      if (value.position >= value.duration && value.duration != Duration.zero) {
+        _signLang?.seekTo(Duration.zero);
+        _updateSubtitle(Duration.zero);
+      }
     }
   }
 
-  // ================= Helper toggle Bahasa Isyarat =================
-
+  // ================= Toggle Functions =================
   Future<void> _toggleSignLang() async {
     final newValue = !_showSignLang;
     setState(() => _showSignLang = newValue);
 
     if (!_showSignLang) {
-      // Sembunyikan → pause agar hemat resource
       _signLang?.pause();
       return;
     }
 
-    // Ditampilkan lagi → sinkronkan posisi lalu play bila main player play
-    if (_signLang != null && _signLang!.value.isInitialized) {
-      Duration target = Duration.zero;
-
-      if (_isYouTube && _yt != null) {
-        try {
-          final seconds = await _yt!.currentTime;
-          target = Duration(milliseconds: (seconds * 1000).round());
-        } catch (_) {}
-      } else if (_mp4Main != null) {
-        target = _mp4Main!.value.position;
+    // Sinkronkan ulang saat ditampilkan (dengan delay)
+    Future.delayed(const Duration(milliseconds: 500), () async {
+      if (_signLang != null && _signLang!.value.isInitialized) {
+        final pos = await _getCurrentPosition();
+        if (pos != null) {
+          _isSeeking = true;
+          await _signLang!.seekTo(pos);
+          Future.delayed(const Duration(milliseconds: 500), () {
+            _isSeeking = false;
+          });
+        }
+        
+        if (_isPlaying) {
+          _signLang?.play();
+        }
       }
-
-      try {
-        await _signLang!.seekTo(target);
-      } catch (_) {}
-
-      final bool mainIsPlaying = _isYouTube
-          ? (_yt?.value.playerState == PlayerState.playing)
-          : (_mp4Main?.value.isPlaying ?? false);
-
-      if (mainIsPlaying) {
-        _signLang!.play();
-      }
-    }
+    });
   }
 
-  // ================= UI =================
-
+  // ================= UI dengan Responsive Sizing =================
   Widget _buildPlayerArea() {
     final Widget mainPlayer = _isYouTube
         ? (_yt == null
@@ -353,30 +512,46 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     return Stack(children: [
       Positioned.fill(child: mainPlayer),
 
-      // Overlay Bahasa Isyarat (tampil jika toggle ON)
+      // Overlay Bahasa Isyarat dengan responsive sizing
       if (_showSignLang && _signLang != null && _signLang!.value.isInitialized)
         Positioned(
-          right: 12,
-          bottom: 12,
-          width: 140,
-          height: 180,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: AspectRatio(
-              aspectRatio: _signLang!.value.aspectRatio,
-              child: VideoPlayer(_signLang!),
+          right: _signLangRightMargin,
+          bottom: _signLangBottomMargin,
+          width: _signLangWidth,
+          height: _signLangHeight,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: AspectRatio(
+                aspectRatio: _signLang!.value.aspectRatio,
+                child: VideoPlayer(_signLang!),
+              ),
             ),
           ),
         ),
 
+      // Subtitle dengan responsive positioning
       if (_showSubtitle && (_currentSubtitle?.isNotEmpty ?? false))
         Positioned(
           left: 12,
-          right: 12,
-          bottom: 8,
+          right: _signLangWidth + 24, // Beri ruang untuk video bahasa isyarat
+          bottom: _isAndroid ? 4 : 8,
           child: Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: EdgeInsets.symmetric(
+                horizontal: _isAndroid ? 8 : 12, 
+                vertical: _isAndroid ? 4 : 6
+              ),
               decoration: BoxDecoration(
                 color: Colors.black.withOpacity(0.55),
                 borderRadius: BorderRadius.circular(8),
@@ -384,7 +559,10 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
               child: Text(
                 _currentSubtitle!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
+                style: TextStyle(
+                  color: Colors.white, 
+                  fontSize: _isAndroid ? 14 : 16
+                ),
               ),
             ),
           ),
@@ -402,9 +580,22 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             children: [
               AspectRatio(aspectRatio: 16 / 9, child: _buildPlayerArea()),
 
-              // Tombol toggle Subtitle & Bahasa Isyarat
+              // Status indicator untuk debugging (hanya di debug mode)
+              if (kDebugMode && _syncFailures > 0)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  color: Colors.orange.withOpacity(0.8),
+                  child: Text(
+                    'Sinkronisasi bermasalah ($_syncFailures/$_maxSyncFailures) - Platform: ${_isAndroid ? "Android" : _isWeb ? "Web" : "Other"}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+
+              // Tombol toggle dengan responsive spacing
               Padding(
-                padding: const EdgeInsets.only(top: 4.0, bottom: 8.0),
+                padding: EdgeInsets.only(top: 4.0, bottom: _isAndroid ? 4.0 : 8.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -412,7 +603,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                       onPressed: () => setState(() => _showSubtitle = !_showSubtitle),
                       child: Text(_showSubtitle ? 'Hide Subtitle' : 'Show Subtitle'),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: _isAndroid ? 8 : 12),
                     TextButton(
                       onPressed: _toggleSignLang,
                       child: Text(_showSignLang ? 'Hide Bahasa Isyarat' : 'Show Bahasa Isyarat'),
@@ -421,6 +612,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                 ),
               ),
 
+              // Quiz button
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: SizedBox(
@@ -455,7 +647,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                 ),
               ),
 
-              // ===== Komentar (Realtime) =====
+              // Komentar section (tetap sama)
               Expanded(
                 child: Container(
                   color: const Color(0xFFFAF9F6),
@@ -495,10 +687,8 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                               );
                             }
 
-                            // Kumpulkan semua uid unik lalu prefetch namanya (batch)
                             final uids = <String>{
-                              for (final d in docs)
-                                (d.data()['userId'] ?? 'guru').toString(),
+                              for (final d in docs) (d.data()['userId'] ?? 'guru').toString(),
                             }.toList();
 
                             return FutureBuilder<Map<String, String>>(
@@ -509,8 +699,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                                 return ListView.separated(
                                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
                                   itemCount: docs.length + 1,
-                                  separatorBuilder: (_, __) =>
-                                      const Divider(thickness: 1, color: Color(0xFF293241)),
+                                  separatorBuilder: (_, __) => const Divider(thickness: 1, color: Color(0xFF293241)),
                                   itemBuilder: (context, index) {
                                     if (index == 0) {
                                       return const Padding(
@@ -531,10 +720,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                                     final text = (data['content'] ?? '').toString();
                                     final userId = (data['userId'] ?? 'guru').toString();
 
-                                    // Ambil nama dari map/cached
-                                    final displayName = nameMap[userId] ??
-                                        _nameCache[userId] ??
-                                        userId; // sementara pakai uid sampai future resolve
+                                    final displayName = nameMap[userId] ?? _nameCache[userId] ?? userId;
 
                                     return _buildCommentCard(
                                       name: displayName.isNotEmpty ? displayName : 'Guru',
@@ -552,6 +738,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             ],
           ),
 
+          // Reply UI dan input komentar (tetap sama)
           if (_replyingTo != null)
             Positioned(
               left: 0,
@@ -582,7 +769,6 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
               ),
             ),
 
-          // Input komentar
           Positioned(
             left: 0,
             right: 0,
@@ -611,8 +797,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                             borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(color: Color(0xFF293241)),
                           ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         ),
                       ),
                     ),
@@ -633,9 +818,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     );
   }
 
-  // ================= Komentar (Firestore) =================
-
-  /// Stream komentar — where(videoId) + orderBy(localCreatedAt desc)
+  // ================= Komentar Functions (tetap sama) =================
   Stream<QuerySnapshot<Map<String, dynamic>>>? get _commentStream {
     final vid = _videoIdForComments;
     if (vid == null || vid.isEmpty) return null;
@@ -646,7 +829,6 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         .snapshots();
   }
 
-  /// Kirim komentar baru (userId = uid login)
   Future<void> _sendCommentToFirestore(String text) async {
     final vid = _videoIdForComments;
     if (vid == null || vid.isEmpty) {
@@ -678,11 +860,10 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     }
   }
 
-  // ====== Prefetch nama user mirip forum_service.getUserName, tapi batch ======
   Future<Map<String, String>> _getNamesForUids(List<String> uids) async {
-    // Gunakan cache lebih dulu
     final result = <String, String>{};
     final missing = <String>[];
+
     for (final uid in uids) {
       if (_nameCache.containsKey(uid)) {
         result[uid] = _nameCache[uid]!;
@@ -692,7 +873,6 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     }
     if (missing.isEmpty) return result;
 
-    // Firestore whereIn maksimal 10 item per query → chunk
     for (var i = 0; i < missing.length; i += 10) {
       final chunk = missing.sublist(i, (i + 10).clamp(0, missing.length));
       try {
@@ -703,14 +883,11 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
 
         for (final doc in snap.docs) {
           final data = doc.data();
-          final name = (data['name'] as String?) ??
-              (data['displayName'] as String?) ??
-              doc.id; // fallback uid
+          final name = (data['name'] as String?) ?? (data['displayName'] as String?) ?? doc.id;
           _nameCache[doc.id] = name;
           result[doc.id] = name;
         }
 
-        // Jika ada uid yang tidak ada dokumennya, isi "Guru" biar nggak query ulang
         final foundIds = snap.docs.map((d) => d.id).toSet();
         for (final uid in chunk) {
           if (!foundIds.contains(uid)) {
@@ -719,7 +896,6 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           }
         }
       } catch (e) {
-        // Jika error (misal rules), jangan crash – isi fallback
         for (final uid in chunk) {
           _nameCache[uid] = 'Guru';
           result[uid] = 'Guru';

@@ -46,6 +46,15 @@ class _AdminHomePageState extends State<AdminHomePage> {
     titleController.dispose();
     super.dispose();
   }
+  void _onBackPressed() async {
+    final popped = await Navigator.maybePop(context);
+    if (!popped && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sudah di halaman awal')),
+      );
+    }
+  }
+
 
   void openUploadDialog() {
     showDialog(
@@ -91,7 +100,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               onPressed: () => Navigator.of(dialogContext).pop(),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3D5A80)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3D5A80), foregroundColor: Colors.white),
               onPressed: () => uploadVideo(dialogContext),
               child: const Text("Upload"),
             ),
@@ -262,24 +271,50 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   bottomRight: Radius.circular(20),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
                 children: [
-                  const Text(
-                    "Hi, Admin",
-                    style: TextStyle(
-                      fontSize: 28,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  // Konten kiri (judul + search)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Hi, Admin",
+                        style: TextStyle(
+                          fontSize: 28,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _SearchBox(
+                        onChanged: (value) => setState(() => searchQuery = value),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  _SearchBox(
-                    onChanged: (value) => setState(() => searchQuery = value),
+
+                  // Tombol Logout di sudut kanan atas
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: TextButton(
+                      onPressed: _onBackPressed,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      child: const Text(
+                        'Logout',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
+
 
             const SizedBox(height: 12),
 

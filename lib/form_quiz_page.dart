@@ -91,6 +91,7 @@ class _FormQuizPageState extends State<FormQuizPage> {
 
     try {
       await batch.commit();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -98,7 +99,8 @@ class _FormQuizPageState extends State<FormQuizPage> {
           backgroundColor: Colors.green,
         ),
       );
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.pop(context, true);
+      Navigator.pop(context, true);
     } catch (e) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -162,7 +164,7 @@ class _FormQuizPageState extends State<FormQuizPage> {
           child: _isLoading
               ? const CircularProgressIndicator(color: Colors.white)
               : const Text(
-                  'Kirim Semua ke Firebase',
+                  'Tambahkan Kuis',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

@@ -8,6 +8,24 @@ class CategoryVideosPage extends StatelessWidget {
   final String subject;
   const CategoryVideosPage({super.key, required this.subject});
 
+  /// 🔹 Fungsi untuk ambil thumbnail dari link YouTube
+  String getYoutubeThumbnail(String url) {
+    final Uri? uri = Uri.tryParse(url);
+    if (uri == null) return '';
+
+    if (uri.host.contains('youtube.com') && uri.queryParameters.containsKey('v')) {
+      final videoId = uri.queryParameters['v'];
+      return 'https://img.youtube.com/vi/$videoId/0.jpg';
+    }
+
+    if (uri.host.contains('youtu.be')) {
+      final videoId = uri.pathSegments.isNotEmpty ? uri.pathSegments[0] : '';
+      return 'https://img.youtube.com/vi/$videoId/0.jpg';
+    }
+
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -47,9 +65,28 @@ class CategoryVideosPage extends StatelessWidget {
                 ),
                 elevation: 4,
                 child: ListTile(
-                  leading: const Icon(Icons.play_circle_fill,
-                      color: Colors.blue, size: 40),
-                  title: Text(title),
+                  // 🔹 Tambahkan thumbnail YouTube di sini
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 100,
+                      height: 60,
+                      child: Image.network(
+                        getYoutubeThumbnail(link),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                        const Icon(Icons.broken_image,
+                            size: 40, color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   subtitle: const Text("Tap to watch"),
                   onTap: () {
                     final docId = doc.id; // <<< ambil ID dokumen dari koleksi `videos`

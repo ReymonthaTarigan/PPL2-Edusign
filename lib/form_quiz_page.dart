@@ -127,19 +127,7 @@ class _FormQuizPageState extends State<FormQuizPage> {
           ),
         ),
         centerTitle: true,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(24),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              'Video ID: ${widget.videoID}',
-              style: const TextStyle(
-                color: Color(0xFFE0FBFC),
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
+        
       ),
       body: Form(
         key: _formKey,

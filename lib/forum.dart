@@ -73,26 +73,33 @@ class _ForumPageState extends State<ForumPage> {
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      barrierDismissible: true, // boleh ditutup tap di luar (opsional)
+      builder: (dialogCtx) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24), // responsif
         title: const Text('Buat Postingan Baru'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(labelText: 'Judul'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: contentController,
-              maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Isi postingan'),
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(labelText: 'Judul'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: contentController,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Isi postingan'),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              // Tutup dialog pakai context dialog
+              Navigator.of(dialogCtx, rootNavigator: true).pop();
+            },
             child: const Text('Batal'),
           ),
           ElevatedButton(
@@ -104,7 +111,8 @@ class _ForumPageState extends State<ForumPage> {
                   content: contentController.text.trim(),
                   userId: user?.uid ?? 'anon',
                 );
-                Navigator.pop(context);
+                // Tutup dialog setelah kirim
+                Navigator.of(dialogCtx, rootNavigator: true).pop();
               }
             },
             child: const Text('Kirim'),
@@ -113,4 +121,5 @@ class _ForumPageState extends State<ForumPage> {
       ),
     );
   }
+
 }

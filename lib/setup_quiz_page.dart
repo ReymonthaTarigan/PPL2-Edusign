@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 import 'form_quiz_page.dart';
 
 class SetupQuizPage extends StatefulWidget {
-  // terima videoId dari AdminHomePage
+  // terima videoId dari AdminHomePage (dipakai, tapi TIDAK ditampilkan)
   final String videoId;
-  // opsional: kalau nanti kamu mau mode edit, bisa kirim jumlah awal
+  // opsional: kalau nanti mau mode edit, bisa kirim jumlah awal
   final int? initialJumlah;
 
   const SetupQuizPage({
@@ -19,14 +19,12 @@ class SetupQuizPage extends StatefulWidget {
 }
 
 class _SetupQuizPageState extends State<SetupQuizPage> {
-  late final TextEditingController _videoController;
   late final TextEditingController _jumlahController;
   final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
     super.initState();
-    _videoController = TextEditingController(text: widget.videoId);
     _jumlahController = TextEditingController(
       text: widget.initialJumlah != null ? widget.initialJumlah.toString() : '',
     );
@@ -34,7 +32,7 @@ class _SetupQuizPageState extends State<SetupQuizPage> {
 
   void _submit() {
     if (_formKey.currentState!.validate()) {
-      final String videoID = _videoController.text.trim();
+      final String videoID = widget.videoId; // ⬅️ ambil langsung, tidak ditampilkan
       final int? jumlah = int.tryParse(_jumlahController.text.trim());
 
       if (jumlah != null && jumlah > 0) {
@@ -53,7 +51,6 @@ class _SetupQuizPageState extends State<SetupQuizPage> {
 
   @override
   void dispose() {
-    _videoController.dispose();
     _jumlahController.dispose();
     super.dispose();
   }
@@ -94,29 +91,7 @@ class _SetupQuizPageState extends State<SetupQuizPage> {
                 ),
                 const SizedBox(height: 30),
 
-                // Video ID (terisi & readOnly)
-                TextFormField(
-                  controller: _videoController,
-                  readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: 'Video ID',
-                    labelStyle: const TextStyle(color: Color(0xFF293241)),
-                    filled: true,
-                    fillColor: const Color(0xFFE0FBFC),
-                    suffixIcon: const Icon(Icons.lock_outline),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: Color(0xFF3D5A80), width: 2),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: Color(0xFF98C1D9)),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Jumlah Pertanyaan
+                // HANYA jumlah pertanyaan
                 TextFormField(
                   controller: _jumlahController,
                   keyboardType: TextInputType.number,

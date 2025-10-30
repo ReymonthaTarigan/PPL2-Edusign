@@ -71,6 +71,11 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // ====== Tambahan untuk stabilkan komentar ======
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _commentStream; // field, bukan getter
+  String _lastUidsKey = '';
+  Future<Map<String, String>>? _namesFuture;
+
   // Platform detection yang kompatibel
   bool get _isAndroid => Theme.of(context).platform == TargetPlatform.android;
   bool get _isWeb => kIsWeb; // Hanya gunakan kIsWeb
@@ -149,6 +154,16 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     _loadSrtFromUrl(widget.subtitle);
     _initializeSignLanguage();
     _initializeMainPlayer();
+
+    // ====== Inisialisasi stream komentar SEKALI ======
+    final vid = _videoIdForComments;
+    if (vid != null && vid.isNotEmpty) {
+      _commentStream = FirebaseFirestore.instance
+          .collection('comments')
+          .where('videoId', isEqualTo: vid)
+          .orderBy('localCreatedAt', descending: true)
+          .snapshots();
+    }
   }
 
   Future<void> _initializeSignLanguage() async {
@@ -186,7 +201,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       if (id != null && id.isNotEmpty) {
         _yt = YoutubePlayerController(
           params: YoutubePlayerParams(
-            showControls: false,
+            showControls: true,
             showFullscreenButton: false,
             enableCaption: false,
             origin: 'https://www.youtube-nocookie.com',
@@ -647,7 +662,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                 ),
               ),
 
-              // Komentar section (tetap sama)
+              // Komentar section
               Expanded(
                 child: Container(
                   color: const Color(0xFFFAF9F6),
@@ -689,17 +704,29 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
 
                             final uids = <String>{
                               for (final d in docs) (d.data()['userId'] ?? 'guru').toString(),
-                            }.toList();
+                            }.toList()
+                              ..sort(); // stabilkan urutan
+
+                            // ====== Cache Future berdasarkan daftar uids ======
+                            final key = uids.join('|');
+                            if (key != _lastUidsKey || _namesFuture == null) {
+                              _lastUidsKey = key;
+                              _namesFuture = _getNamesForUids(uids);
+                            }
 
                             return FutureBuilder<Map<String, String>>(
-                              future: _getNamesForUids(uids),
+                              future: _namesFuture,
                               builder: (context, nameSnap) {
                                 final nameMap = nameSnap.data ?? const <String, String>{};
 
                                 return ListView.separated(
                                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 120),
                                   itemCount: docs.length + 1,
-                                  separatorBuilder: (_, __) => const Divider(thickness: 1, color: Color(0xFF293241)),
+                                  separatorBuilder: (_, __) => const Divider(
+                                    height: 16,                  // jarak vertikal total
+                                    thickness: 0.5,              // garis lebih tipis
+                                    color: Color(0x33293241),    // #293241 dengan ~20% opacity
+                                  ),
                                   itemBuilder: (context, index) {
                                     if (index == 0) {
                                       return const Padding(
@@ -738,7 +765,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             ],
           ),
 
-          // Reply UI dan input komentar (tetap sama)
+          // Reply UI dan input komentar
           if (_replyingTo != null)
             Positioned(
               left: 0,
@@ -818,17 +845,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     );
   }
 
-  // ================= Komentar Functions (tetap sama) =================
-  Stream<QuerySnapshot<Map<String, dynamic>>>? get _commentStream {
-    final vid = _videoIdForComments;
-    if (vid == null || vid.isEmpty) return null;
-    final col = FirebaseFirestore.instance.collection('comments');
-    return col
-        .where('videoId', isEqualTo: vid)
-        .orderBy('localCreatedAt', descending: true)
-        .snapshots();
-  }
-
+  // ================= Komentar Functions =================
   Future<void> _sendCommentToFirestore(String text) async {
     final vid = _videoIdForComments;
     if (vid == null || vid.isEmpty) {
@@ -913,7 +930,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Divider(thickness: 1, color: Color(0xFF293241)),
+        
         Row(
           children: [
             CircleAvatar(backgroundImage: NetworkImage(avatarUrl), radius: 18),
@@ -929,7 +946,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
           padding: const EdgeInsets.only(left: 42.0),
           child: Text(text, style: const TextStyle(color: Color(0xFF293241))),
         ),
-        const Divider(thickness: 1, color: Color(0xFF293241)),
+        
       ],
     );
   }

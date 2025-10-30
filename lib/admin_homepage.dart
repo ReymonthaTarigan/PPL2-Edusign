@@ -61,6 +61,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24), // ⬅️ tambah ini
           title: const Text("Upload Video Baru"),
           content: SingleChildScrollView(
             child: Column(
@@ -76,18 +77,20 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: selectedGrade, // boleh null
+                  isExpanded: true, // ⬅️ penting
                   decoration: const InputDecoration(labelText: "Pilih Jenjang"),
                   items: grades
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                      .map((e) => DropdownMenuItem(value: e, child: Text(e, overflow: TextOverflow.ellipsis)))
                       .toList(),
                   onChanged: (v) => setState(() => selectedGrade = v),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: selectedSubject, // boleh null
+                  isExpanded: true, // ⬅️ penting
                   decoration: const InputDecoration(labelText: "Pilih Mata Pelajaran"),
                   items: subjects
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                      .map((e) => DropdownMenuItem(value: e, child: Text(e, overflow: TextOverflow.ellipsis)))
                       .toList(),
                   onChanged: (v) => setState(() => selectedSubject = v),
                 ),
@@ -465,6 +468,9 @@ class _VideoCard extends StatelessWidget {
     const chipBg = Color(0xFFE8F2FF);
     const chipBorder = Color(0xFFBBD9FF);
 
+    final width = MediaQuery.sizeOf(context).width;
+    final isSmall = width < 380; // iPhone SE, dsb.
+
     return Container(
       decoration: BoxDecoration(
         color: cardBg,
@@ -473,9 +479,11 @@ class _VideoCard extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.slideshow, color: Color(0xFF1E88E5), size: 28),
           const SizedBox(width: 10),
+
           // judul + chips
           Expanded(
             child: Column(
@@ -485,11 +493,12 @@ class _VideoCard extends StatelessWidget {
                   onTap: onTitleTap,
                   child: Text(
                     title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 16,
                       color: Color.fromARGB(255, 0, 0, 0),
                       fontWeight: FontWeight.w700,
-                  
                     ),
                   ),
                 ),
@@ -500,29 +509,55 @@ class _VideoCard extends StatelessWidget {
                   children: [
                     _Pill(text: subject, bg: chipBg, border: chipBorder),
                     _Pill(text: grade, bg: chipBg, border: chipBorder),
-                    if (processing) const _ProcessingBadge(), // indikator tanpa animasi
+                    if (processing) const _ProcessingBadge(), // indikator; dibuat bisa wrap (di bawah)
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Kelola Kuis',
-            icon: const Icon(Icons.quiz, color: Color(0xFF3949AB)),
-            onPressed: onQuizTap,
+
+          // area tombol kanan: dipadatkan di layar kecil
+          const SizedBox(width: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Kelola Kuis',
+                icon: const Icon(Icons.quiz, color: Color(0xFF3949AB)),
+                iconSize: isSmall ? 20 : 24,
+                padding: EdgeInsets.all(isSmall ? 4 : 8),
+                visualDensity: isSmall ? VisualDensity.compact : VisualDensity.standard,
+                constraints: BoxConstraints(
+                  minWidth: isSmall ? 36 : 48,
+                  minHeight: isSmall ? 36 : 48,
+                ),
+                onPressed: onQuizTap,
+              ),
+              IconButton(
+                tooltip: 'Hapus Video',
+                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                iconSize: isSmall ? 20 : 24,
+                padding: EdgeInsets.all(isSmall ? 4 : 8),
+                visualDensity: isSmall ? VisualDensity.compact : VisualDensity.standard,
+                constraints: BoxConstraints(
+                  minWidth: isSmall ? 36 : 48,
+                  minHeight: isSmall ? 36 : 48,
+                ),
+                onPressed: onDeleteTap,
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.black45,
+                size: isSmall ? 20 : 24,
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'Hapus Video',
-            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-            onPressed: onDeleteTap,
-          ),
-          const Icon(Icons.chevron_right, color: Colors.black45),
         ],
       ),
     );
   }
 }
+
 
 class _Pill extends StatelessWidget {
   final String text;
@@ -548,6 +583,7 @@ class _Pill extends StatelessWidget {
 }
 
 /// Badge sederhana: ikon + teks tanpa animasi
+/// Badge sederhana: ikon + teks yang bisa membungkus di layar sempit
 class _ProcessingBadge extends StatelessWidget {
   const _ProcessingBadge();
 
@@ -562,15 +598,21 @@ class _ProcessingBadge extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: const [
           Icon(Icons.schedule, size: 16, color: Color(0xFFB26A00)),
           SizedBox(width: 6),
-          Text(
-            "processing bahasa isyarat dan subtitle",
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFFB26A00),
+          Flexible(
+            child: Text(
+              "processing bahasa isyarat dan subtitle",
+              softWrap: true,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFFB26A00),
+              ),
             ),
           ),
         ],
@@ -578,6 +620,7 @@ class _ProcessingBadge extends StatelessWidget {
     );
   }
 }
+
 
 // === SearchBox yang mengirim perubahan ke parent ===
 class _SearchBox extends StatelessWidget {

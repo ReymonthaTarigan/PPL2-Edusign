@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 import 'getService/getdetail.dart';
 import 'auth.dart';
 import 'forum.dart';
@@ -392,55 +393,38 @@ class _HomePageState extends State<HomePage> {
         child: Container(
           width: 208,
           height: 106,
-          child: Stack(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: const Alignment(-0.8, 0.0),
+              end: const Alignment(1.0, 1.0),
+              colors: gradientColors,
+            ),
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 🔹 Background gradient
-              Positioned(
-                left: 3,
-                top: 0,
-                child: Container(
-                  width: 205,
-                  height: 106,
-                  decoration: ShapeDecoration(
-                    gradient: LinearGradient(
-                      begin: const Alignment(-0.8, 0.0), // gradient geser ke kiri
-                      end: const Alignment(1.0, 1.0),
-                      colors: gradientColors,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                  ),
-                ),
-              ),
-
               // 🔹 Gambar ikon
-              Positioned(
-                left: 10,
-                top: 8,
-                child: Container(
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Image.asset(
+                  iconPath,
                   width: 85,
                   height: 85,
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: AssetImage(iconPath),
-                      fit: BoxFit.contain,
-                    ),
-                  ),
+                  fit: BoxFit.contain,
                 ),
               ),
 
-              // 🔹 Teks kategori
-              Positioned(
-                left: 105,
-                top: 35,
-                child: SizedBox(
-                  width: 95,
+              // 🔹 Teks kategori (rata kiri + auto wrap)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
                   child: Text(
                     title,
-                    textAlign: TextAlign.center,
+                    textAlign: TextAlign.left,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    softWrap: true,
                     style: const TextStyle(
                       color: Colors.black,
                       fontSize: 16,

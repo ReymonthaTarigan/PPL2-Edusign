@@ -109,7 +109,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                     });
                   },
                   child: Text(
-                    _showSubtitle ? "Hide Subtitle" : "Show Subtitle",
+                    _showSubtitle ? "Sembunyikan Subtitle" : "Tampilkan Subtitle",
                     style: const TextStyle(color: Colors.blue),
                   ),
                 ),

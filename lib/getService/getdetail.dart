@@ -616,12 +616,12 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                   children: [
                     TextButton(
                       onPressed: () => setState(() => _showSubtitle = !_showSubtitle),
-                      child: Text(_showSubtitle ? 'Hide Subtitle' : 'Show Subtitle'),
+                      child: Text(_showSubtitle ? 'Sembunyikan Subtitle' : 'Tampilkan Subtitle'),
                     ),
                     SizedBox(width: _isAndroid ? 8 : 12),
                     TextButton(
                       onPressed: _toggleSignLang,
-                      child: Text(_showSignLang ? 'Hide Bahasa Isyarat' : 'Show Bahasa Isyarat'),
+                      child: Text(_showSignLang ? 'Sembunyikan Bahasa Isyarat' : 'Tampilkan Bahasa Isyarat'),
                     ),
                   ],
                 ),

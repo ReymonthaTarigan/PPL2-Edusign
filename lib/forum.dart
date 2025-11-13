@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'forum_service.dart';
 import 'forum_detail.dart';
+import 'homepage.dart';
+import 'setting.dart';
 
 class ForumPage extends StatefulWidget {
   const ForumPage({Key? key}) : super(key: key);
@@ -64,6 +66,33 @@ class _ForumPageState extends State<ForumPage> {
         onPressed: () => _showAddPostDialog(context),
         child: const Icon(Icons.add),
       ),
+
+      // ✅ Tambahan: Bottom Navigation Bar
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 1, // Forum ada di index 1
+        selectedItemColor: Colors.blue[900],
+        unselectedItemColor: Colors.black54,
+        onTap: (index) {
+          if (index == 0) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const HomePage()),
+            );
+          } else if (index == 1) {
+            // Sudah di Forum, tidak melakukan apa-apa
+          } else if (index == 2) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfilePage()),
+            );
+          }
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.forum), label: 'Forum'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
+      ),
     );
   }
 
@@ -73,9 +102,9 @@ class _ForumPageState extends State<ForumPage> {
 
     showDialog(
       context: context,
-      barrierDismissible: true, // boleh ditutup tap di luar (opsional)
+      barrierDismissible: true,
       builder: (dialogCtx) => AlertDialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24), // responsif
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: const Text('Buat Postingan Baru'),
         content: SingleChildScrollView(
           child: Column(
@@ -97,7 +126,6 @@ class _ForumPageState extends State<ForumPage> {
         actions: [
           TextButton(
             onPressed: () {
-              // Tutup dialog pakai context dialog
               Navigator.of(dialogCtx, rootNavigator: true).pop();
             },
             child: const Text('Batal'),
@@ -111,7 +139,6 @@ class _ForumPageState extends State<ForumPage> {
                   content: contentController.text.trim(),
                   userId: user?.uid ?? 'anon',
                 );
-                // Tutup dialog setelah kirim
                 Navigator.of(dialogCtx, rootNavigator: true).pop();
               }
             },
@@ -121,5 +148,4 @@ class _ForumPageState extends State<ForumPage> {
       ),
     );
   }
-
 }

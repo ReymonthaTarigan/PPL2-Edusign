@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 
-enum QuizState { entry, loading, answering, results, noQuiz } // + noQuiz
+enum QuizState { entry, loading, answering, results, noQuiz }
 
 class QuizPage extends StatefulWidget {
-  /// Jika diisi, halaman akan otomatis mengisi textfield & langsung memulai kuis
   final String? initialVideoId;
-
   const QuizPage({super.key, this.initialVideoId});
 
   @override
@@ -36,10 +35,7 @@ class _QuizPageState extends State<QuizPage> {
     final videoId = _videoController.text.trim();
     if (videoId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Video ID tidak boleh kosong'),
-          backgroundColor: Color(0xFFEE6C4D),
-        ),
+        const SnackBar(content: Text('Video ID tidak boleh kosong')),
       );
       return;
     }
@@ -56,10 +52,7 @@ class _QuizPageState extends State<QuizPage> {
           .get();
 
       if (snapshot.docs.isEmpty) {
-        // TAMPILKAN HALAMAN “belum tersedia”
-        setState(() {
-          _currentState = QuizState.noQuiz;
-        });
+        setState(() => _currentState = QuizState.noQuiz);
       } else {
         snapshot.docs.shuffle();
         setState(() {
@@ -69,10 +62,7 @@ class _QuizPageState extends State<QuizPage> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: const Color(0xFFEE6C4D),
-        ),
+        SnackBar(content: Text('Error: $e')),
       );
       _resetQuiz();
     }
@@ -101,15 +91,6 @@ class _QuizPageState extends State<QuizPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFAF9F6),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF3D5A80),
-        elevation: 2,
-        title: const Text(
-          'Quiz EduSign',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-      ),
       body: _buildBody(),
     );
   }
@@ -119,15 +100,13 @@ class _QuizPageState extends State<QuizPage> {
       case QuizState.entry:
         return _buildEntryView();
       case QuizState.loading:
-        return const Center(
-          child: CircularProgressIndicator(color: Color(0xFF3D5A80)),
-        );
+        return const Center(child: CircularProgressIndicator(color: Color(0xFF3D5A80)));
       case QuizState.answering:
         return _buildQuestionView();
       case QuizState.results:
         return _buildResultsView();
       case QuizState.noQuiz:
-        return _buildNoQuizView(); // << baru
+        return _buildNoQuizView();
     }
   }
 
@@ -139,28 +118,17 @@ class _QuizPageState extends State<QuizPage> {
         children: [
           const Text(
             'Masukkan Video ID untuk memulai kuis',
-            style: TextStyle(
-              fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF293241),
-            ),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF293241)),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
           TextField(
             controller: _videoController,
-            style: const TextStyle(color: Color(0xFF293241)),
             decoration: InputDecoration(
               labelText: 'Video ID',
-              labelStyle: const TextStyle(color: Color(0xFF293241)),
               filled: true,
               fillColor: const Color(0xFFE0FBFC),
-              enabledBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Color(0xFF293241), width: 1.5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Color(0xFF3D5A80), width: 2),
-                borderRadius: BorderRadius.circular(12),
-              ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 24),
@@ -171,10 +139,7 @@ class _QuizPageState extends State<QuizPage> {
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 40),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            child: const Text(
-              'Mulai Kuis',
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+            child: const Text('Mulai Kuis', style: TextStyle(color: Colors.white, fontSize: 16)),
           )
         ],
       ),
@@ -185,79 +150,135 @@ class _QuizPageState extends State<QuizPage> {
     final questionData = _questions[_currentQuestionIndex].data() as Map<String, dynamic>;
     final List<dynamic> options = questionData['options'];
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Card(
-          color: const Color(0xFF98C1D9),
-          elevation: 6,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFF293241), width: 2),
+    return Stack(
+      children: [
+        // Background gradient
+        Container(
+          height: 250,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF98C1D9), Color(0xFF3D5A80)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(150)),
           ),
+        ),
+
+        // Tombol back di kiri atas
+        SafeArea(
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+
+        // Konten pertanyaan
+        Align(
+          alignment: Alignment.topCenter,
           child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Soal ${_currentQuestionIndex + 1} dari ${_questions.length}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFF293241), fontWeight: FontWeight.w600,
-                    ),
+            padding: const EdgeInsets.only(top: 100),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Lingkaran nomor
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF3D5A80), width: 4),
                   ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0FBFC),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color.fromARGB(255, 49, 49, 49),
-                          offset: Offset(-2, 2), blurRadius: 4, spreadRadius: 1,
-                        ),
-                      ],
-                    ),
+                  child: Center(
                     child: Text(
-                      questionData['pertanyaan'],
-                      textAlign: TextAlign.center,
+                      '${_currentQuestionIndex + 1}',
                       style: const TextStyle(
-                        color: Color(0xFF293241), fontSize: 20, fontWeight: FontWeight.bold,
+                        color: Color(0xFF3D5A80),
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  ...options.map((option) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6.0),
-                      child: ElevatedButton(
-                        onPressed: () => _answerQuestion(option as String),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3D5A80),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 3,
-                        ),
-                        child: Text(
-                          option as String,
-                          style: const TextStyle(
-                            fontSize: 16, color: Color(0xFFE0FBFC), fontWeight: FontWeight.w600,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Question ${_currentQuestionIndex + 1}/${_questions.length}',
+                  style: const TextStyle(
+                    color: Color(0xFFFFFFFF),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Pertanyaan
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 32),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 4))
+                    ],
+                  ),
+                  child: Text(
+                    questionData['pertanyaan'],
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                const SizedBox(height: 40),
+
+                // Pilihan jawaban (dalam box)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: options.map((option) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: GestureDetector(
+                          onTap: () => _answerQuestion(option as String),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(color: const Color(0xFF3D5A80)),
+                              borderRadius: BorderRadius.circular(30),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: AutoSizeText(
+                                option as String,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                minFontSize: 10,
+                                style: const TextStyle(
+                                  color: Color(0xFF3D5A80),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  }).toList(),
-                ],
-              ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -275,37 +296,27 @@ class _QuizPageState extends State<QuizPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Quiz Selesai!',
-                style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF293241),
-                ),
-              ),
+              const Text('Quiz Selesai!',
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF293241))),
               const SizedBox(height: 20),
               const Text('Nilai Kamu:', style: TextStyle(fontSize: 18, color: Color(0xFF293241))),
               Text(
                 '$_score / ${_questions.length}',
                 style: const TextStyle(
-                  fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF3D5A80),
-                ),
+                    fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF3D5A80)),
               ),
               const SizedBox(height: 24),
-              // GANTI: tombol kembali ke materi (pop ke halaman sebelumnya)
               ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).maybePop();
-                },
+                onPressed: () => Navigator.of(context).maybePop(),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3D5A80),
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text(
-                  'Kembali ke Materi',
-                  style: TextStyle(
-                    color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600,
-                  ),
-                ),
+                    backgroundColor: const Color(0xFF3D5A80),
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                child: const Text('Kembali ke Materi',
+                    style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
             ],
           ),
@@ -314,7 +325,6 @@ class _QuizPageState extends State<QuizPage> {
     );
   }
 
-  // Tampilan bila tidak ada soal untuk video ini
   Widget _buildNoQuizView() {
     return Center(
       child: Card(
@@ -329,30 +339,19 @@ class _QuizPageState extends State<QuizPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Quiz untuk materi ini belum tersedia',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF293241),
-                ),
-              ),
-              const SizedBox(height: 16),
-              
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).maybePop();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3D5A80),
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text(
-                  'Kembali',
+              const Text('Quiz untuk materi ini belum tersedia',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600,
-                  ),
-                ),
+                      fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF293241))),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).maybePop(),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3D5A80),
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                child: const Text('Kembali',
+                    style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
             ],
           ),
